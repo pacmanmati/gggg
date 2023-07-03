@@ -1,0 +1,22 @@
+[package]
+name = "gggg"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = ["examples/hello-world"]
+
+resolver = "2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.71"
+easy-gltf = "1.0.0"
+env_logger = "0.10.0"
+generational-arena = "0.2.9"
+log = "0.4.19"
+nalgebra = "0.32.2"
+pollster = "0.3.0"
+wgpu = "0.16.1"
+winit = "0.28.6"

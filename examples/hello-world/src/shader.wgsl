@@ -1,10 +1,13 @@
 @group(0) @binding(0)
 var<uniform> camera: Camera;
+@group(0) @binding(1)
+var atlas_texture: texture_2d<f32>;
+
+// @group(1) @binding(0)
+// var texture: texture_2d<f32>;
 @group(1) @binding(0)
-var texture: texture_2d<f32>;
-@group(2) @binding(0)
 var samp: sampler;
-@group(3) @binding(0)
+@group(2) @binding(0)
 var<storage, read> lights: array<Light>;
 
 struct Camera {
@@ -28,6 +31,7 @@ struct InstanceInput {
     @location(4) model_matrix_1: vec4<f32>,
     @location(5) model_matrix_2: vec4<f32>,
     @location(6) model_matrix_3: vec4<f32>,
+    @location(7) atlas_coords: vec4<u32>,
 }
 
 struct VertexOutput {

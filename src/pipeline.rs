@@ -1,16 +1,20 @@
 use std::mem::take;
 
+use generational_arena::Index;
 use wgpu::{
-    BlendState, ColorTargetState, ColorWrites, DepthStencilState, Device, Face, FragmentState,
-    MultisampleState, PipelineLayoutDescriptor, PrimitiveState, RenderPipeline,
-    RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, TextureFormat, VertexAttribute,
-    VertexState, VertexStepMode,
+    BlendState, ColorTargetState, ColorWrites, Device, Face, FragmentState, MultisampleState,
+    PipelineLayoutDescriptor, PrimitiveState, RenderPipeline, RenderPipelineDescriptor,
+    ShaderModule, ShaderModuleDescriptor, TextureFormat, VertexAttribute, VertexState,
+    VertexStepMode,
 };
 
 use crate::{
     bind::{BindHandle, VertexBufferEntry},
     render::Render,
 };
+
+#[derive(Debug)]
+pub struct PipelineHandle(pub Index);
 
 /// An abstraction over wgpu pipelines that simplifies custom pipeline creation.
 /// A pipeline is constructed using a [PipelineBuilder] which bundles the creation of [wgpu::RenderPipeline], [wgpu::ShaderModule], etc.
@@ -28,47 +32,7 @@ pub struct Pipeline {
     pub binds: Vec<BindHandle>,
 }
 
-impl Pipeline {
-    // pub fn write_buffer(&mut self, queue: &Queue, data: &[u8], group: u32, binding: u32) {
-    //     let resource = self
-    //         .binds
-    //         .get(group as usize)
-    //         .unwrap()
-    //         .resources
-    //         .get(binding as usize)
-    //         .unwrap();
-    //     let buffer = match resource {
-    //         BindEntryResource::Buffer(buffer) => buffer,
-    //         _ => unreachable!(),
-    //     };
-    //     queue.write_buffer(buffer, 0, data);
-    // }
-
-    // pub fn write_texture(
-    //     &mut self,
-    //     queue: &Queue,
-    //     data: &[u8],
-    //     data_layout: ImageDataLayout,
-    //     size: Extent3d,
-    //     group: u32,
-    //     binding: u32,
-    // ) {
-    //     let resource = self
-    //         .binds
-    //         .get(group as usize)
-    //         .unwrap()
-    //         .resources
-    //         .get(binding as usize)
-    //         .unwrap();
-
-    //     let texture = match resource {
-    //         BindEntryResource::Texture(texture, ..) => texture.as_image_copy(),
-    //         _ => unreachable!(),
-    //     };
-
-    //     queue.write_texture(texture, data, data_layout, size);
-    // }
-}
+// impl Pipeline {}
 
 pub struct PipelineBuilder {
     // bgs: Vec<Vec<BindEntry>>,

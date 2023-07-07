@@ -1,15 +1,16 @@
-use std::{f32::consts::FRAC_PI_2, io::Read};
-
 use gggg::{
     bind::{BindEntry, BindEntryType, BindHandle},
     camera::{Camera, ProjectionType},
+    geometry::{BasicGeometry, Geometry},
+    gltf::load_mesh,
     pipeline::PipelineBuilder,
     plain::Plain,
-    render::{Geometry, InstanceData, Mesh, Render},
+    render::{InstanceData, Mesh, Render, RenderObject},
+    texture::Texture,
     window::{make_window, AppLoop},
 };
 use image::{io::Reader, EncodableLayout};
-use nalgebra::{point, Isometry3, IsometryMatrix3, Matrix4, SimdValue, Translation3, Vector3};
+use nalgebra::{point, Matrix4, Translation3, Vector4};
 use wgpu::{
     vertex_attr_array, BufferUsages, Extent3d, ImageDataLayout, ShaderStages, TextureUsages,
 };
@@ -19,6 +20,7 @@ use winit::window::Window;
 #[derive(Debug)]
 struct Instance {
     transform: Matrix4<f32>,
+    atlas_coords: Vector4<u32>,
 }
 
 impl InstanceData for Instance {
@@ -103,14 +105,16 @@ impl Cube {
 }
 
 impl Geometry for Cube {
-    fn contents(&self) -> Vec<u8> {
-        let slice = self.vertices.as_slice();
-        let bytes = slice.as_bytes();
-        Vec::from(bytes)
+    fn contents(&self) -> &[u8] {
+        self.vertices.as_bytes()
     }
 
     fn length(&self) -> u32 {
         self.vertices.len() as u32
+    }
+
+    fn indices(&self) -> Option<&[u8]> {
+        None
     }
 }
 
@@ -131,13 +135,25 @@ struct CameraUniform {
 
 unsafe impl Plain for CameraUniform {}
 
+struct CustomRenderObject {}
+
+impl RenderObject for CustomRenderObject {
+    type InstanceType = Instance;
+
+    type GeometryType = Cube;
+
+    fn instance_data(render: &Render, mesh: Mesh<Self::GeometryType>) -> Self::InstanceType {
+        todo!()
+    }
+}
+
 struct App {
     render: Render,
     camera: Camera,
     rot_y: f32,
     rot_x: f32,
     camera_distance: f32,
-    camera_bind: BindHandle,
+    defaults_bind: BindHandle,
 }
 
 impl App {
@@ -147,11 +163,6 @@ impl App {
         let y = self.camera_distance * self.rot_x.sin();
         self.camera.eye = point![x, y, z];
 
-        // let camera_data = self.camera.view_projection();
-
-        // let camera_slice = camera_data.as_slice();
-        // let camera_bytes = camera_slice.as_bytes();
-
         let camera_data = CameraUniform {
             view_proj: self.camera.view_projection().into(),
             position: self.camera.eye.into(),
@@ -159,7 +170,7 @@ impl App {
         };
 
         self.render
-            .write_buffer(camera_data.as_bytes(), self.camera_bind, 0);
+            .write_buffer(camera_data.as_bytes(), self.defaults_bind, 0);
     }
 
     pub fn zoom_camera(&mut self, delta: (f32, f32)) {
@@ -198,37 +209,43 @@ impl AppLoop for App {
             padding: 0,
         };
 
-        let camera_bind_handle = render.build_bind(&mut [BindEntry {
-            visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-            ty: BindEntryType::BufferUniform {
-                size: std::mem::size_of_val(&camera_data) as u64,
-                usages: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            },
-
-            count: None,
-            resource: None,
-        }]);
-
-        let readimg = Reader::open("cobble.png").unwrap().decode().unwrap();
-        let img = readimg.to_rgba8();
-
-        let texture_bind_handle = render.build_bind(&mut [BindEntry {
-            visibility: ShaderStages::FRAGMENT,
-            ty: BindEntryType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                view_dimension: wgpu::TextureViewDimension::D2,
-                sample_count: 1,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                size: wgpu::Extent3d {
-                    width: img.width(),
-                    height: img.height(),
-                    depth_or_array_layers: 1,
+        let defaults_bind = render.build_bind(&mut [
+            BindEntry {
+                visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
+                ty: BindEntryType::BufferUniform {
+                    size: std::mem::size_of_val(&camera_data) as u64,
+                    usages: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
                 },
-                usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+
+                count: None,
+                resource: None,
             },
-            count: None,
-            resource: None,
-        }]);
+            BindEntry {
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindEntryType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_count: 1,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    size: Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 1,
+                    },
+                    usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
+                },
+                count: None,
+                resource: None,
+            },
+        ]);
+
+        render.set_atlas(defaults_bind, 1);
+
+        let cobble_tex = Texture::from_path("cobble.png");
+        let stone_tex = Texture::from_path("stone.png");
+
+        let cobble_handle = render.add_texture(cobble_tex);
+        let stone_handle = render.add_texture(stone_tex);
 
         let sampler_bind_handle = render.build_bind(&mut [BindEntry {
             visibility: ShaderStages::FRAGMENT,
@@ -273,41 +290,40 @@ impl AppLoop for App {
 
         let pipeline = PipelineBuilder::new()
             .with_cull_mode(Some(wgpu::Face::Back))
-            .with_bind(camera_bind_handle)
-            .with_bind(texture_bind_handle)
+            .with_bind(defaults_bind)
             .with_bind(sampler_bind_handle)
             .with_bind(lights_bind_handle)
             .with_format(wgpu::TextureFormat::Bgra8UnormSrgb)
             .with_shader(include_str!("shader.wgsl"))
             .with_vb::<Vertex>(
                 wgpu::VertexStepMode::Vertex,
-                &vertex_attr_array![0 => Float32x3, 1=> Float32x2, 2 => Float32x3],
+                &vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x3],
             )
             .with_vb::<Instance>(
                 wgpu::VertexStepMode::Instance,
-                &vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32x4 ],
+                &vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32x4, 7 => Uint32x4],
             )
             .build(&render);
 
         let camera_bytes = camera_data.as_bytes();
 
-        render.write_buffer(camera_bytes, camera_bind_handle, 0);
+        render.write_buffer(camera_bytes, defaults_bind, 0);
 
-        render.write_texture(
-            img.as_bytes(),
-            ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(img.width() * 4),
-                rows_per_image: None,
-            },
-            Extent3d {
-                width: img.width(),
-                height: img.height(),
-                depth_or_array_layers: 1,
-            },
-            texture_bind_handle,
-            0,
-        );
+        // render.write_texture(
+        //     img.as_bytes(),
+        //     ImageDataLayout {
+        //         offset: 0,
+        //         bytes_per_row: Some(img.width() * 4),
+        //         rows_per_image: None,
+        //     },
+        //     Extent3d {
+        //         width: img.width(),
+        //         height: img.height(),
+        //         depth_or_array_layers: 1,
+        //     },
+        //     texture_bind_handle,
+        //     0,
+        // );
 
         render.add_pipeline(pipeline);
 
@@ -318,10 +334,43 @@ impl AppLoop for App {
 
         let cube_handle = render.add_mesh::<Cube, Instance>(cube_mesh);
 
+        let house_meshes = load_mesh("biplane_painted.glb").unwrap();
+
+        // for mesh in house_meshes {
+        //     let house_mesh_handle = render.add_mesh::<BasicGeometry, Instance>(mesh);
+
+        //     render.add_instance(
+        //         house_mesh_handle,
+        //         Instance {
+        //             transform: Translation3::new(0.0, -1.0, -2.0).to_homogeneous(),
+        //             atlas_coords: Vector4::new(0, 0, 0, 0),
+        //         },
+        //     );
+        // }
+
+        // how do we go from texture_handle -> atlas_coords?
+        // problem: we call pack every time an image is added
+        // the atlas_coords instance data might become outdated
+        // atlas_coords needs to be re-evaluated every time
+        //
+        // rework:
+        // create a render object trait, requiring a function that returns instance data
+        //
+        //
+
         render.add_instance(
             cube_handle,
             Instance {
                 transform: Translation3::new(0.0, 0.0, 0.0).to_homogeneous(),
+                atlas_coords: Vector4::new(0, 0, 0, 0),
+            },
+        );
+
+        render.add_instance(
+            cube_handle,
+            Instance {
+                transform: Translation3::new(1.0, 0.0, 0.0).to_homogeneous(),
+                atlas_coords: Vector4::new(0, 0, 0, 0),
             },
         );
 
@@ -331,7 +380,7 @@ impl AppLoop for App {
             rot_y: 0.0,
             rot_x: 0.0,
             camera_distance: 5.0,
-            camera_bind: camera_bind_handle,
+            defaults_bind,
         }
     }
 

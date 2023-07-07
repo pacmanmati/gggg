@@ -9,14 +9,18 @@ use wgpu::{
     BufferUsages, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d,
     ImageDataLayout, Instance, Operations, Queue, RenderPassColorAttachment,
     RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, Surface,
-    SurfaceConfiguration, Texture, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureViewDescriptor,
+    SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    TextureViewDescriptor,
 };
 use winit::window::Window;
 
 use crate::{
+    atlas::{Atlas, RectHandle},
     bind::{Bind, BindEntry, BindEntryResource, BindHandle},
-    pipeline::Pipeline,
+    geometry::Geometry,
+    material::Material,
+    pipeline::{Pipeline, PipelineHandle},
+    texture::Texture,
 };
 
 // renderer draws meshes
@@ -25,11 +29,19 @@ pub struct Render {
     device: Device,
     queue: Queue,
     surface: Surface,
-    pipelines: Vec<Pipeline>,
+    pipelines: Arena<Pipeline>,
     binds: Arena<Bind>,
-    meshes: Arena<(Mesh<Box<dyn Geometry>>, Buffer)>,
+    meshes: Arena<(
+        Mesh<Box<dyn Geometry>, Box<dyn Material>>,
+        Buffer,
+        Option<Buffer>,
+    )>,
+    textures: Arena<Texture>,
+    atlas_bind: Option<(BindHandle, u32)>,
+    atlas: Atlas,
+    rect_to_tex: HashMap<RectHandle, TextureHandle>,
     instances: HashMap<MeshHandle, (Vec<Box<dyn InstanceData>>, Buffer)>,
-    depth_texture: Texture,
+    depth_texture: wgpu::Texture,
 }
 
 impl Render {
@@ -63,11 +75,70 @@ impl Render {
             .unwrap();
 
         let texture = match resource {
-            BindEntryResource::Texture(texture, ..) => texture.as_image_copy(),
+            BindEntryResource::Texture(texture, ..) => texture,
             _ => unreachable!(),
         };
 
-        self.queue.write_texture(texture, data, data_layout, size);
+        // offset is in bytes (one byte represents one pixel in the case of rgba8)
+        // TODO: support different texture types
+        let x = data_layout.offset % data_layout.bytes_per_row.unwrap() as u64;
+        let y = data_layout.offset / data_layout.bytes_per_row.unwrap() as u64;
+        let overflow_x = x + size.width as u64 - texture.width() as u64;
+        let overflow_y = y + size.height as u64 - texture.height() as u64;
+
+        if overflow_x > 0 || overflow_y > 0 {
+            let new_size = Extent3d {
+                width: texture.width().max(texture.width() + overflow_x as u32),
+                height: texture.height().max(texture.height() + overflow_y as u32),
+                depth_or_array_layers: texture.depth_or_array_layers(),
+            };
+            let descriptor = TextureDescriptor {
+                label: None,
+                size: new_size,
+                mip_level_count: texture.mip_level_count().to_owned(),
+                sample_count: texture.sample_count().to_owned(),
+                dimension: texture.dimension().to_owned(),
+                format: texture.format().to_owned(),
+                usage: texture.usage().to_owned(),
+                view_formats: &[],
+            };
+
+            let new_texture = self.device.create_texture(&descriptor);
+
+            let resource = self
+                .get_bind_mut(handle)
+                .unwrap()
+                .resources
+                .get_mut(binding as usize)
+                .unwrap();
+
+            let texture = match resource {
+                BindEntryResource::Texture(texture, ..) => texture,
+                _ => unreachable!(),
+            };
+
+            let _ = std::mem::replace(texture, new_texture);
+
+            // rust hell. you must drop the mutable borrow for an immutable one before borrowing self.queue
+            let resource = self
+                .get_bind(handle)
+                .unwrap()
+                .resources
+                .get(binding as usize)
+                .unwrap();
+
+            let texture = match resource {
+                BindEntryResource::Texture(texture, ..) => texture,
+                _ => unreachable!(),
+            };
+
+            self.queue
+                .write_texture(texture.as_image_copy(), data, data_layout, size);
+            return;
+        }
+
+        self.queue
+            .write_texture(texture.as_image_copy(), data, data_layout, size);
     }
 
     pub fn new(window: &Window) -> Result<Self> {
@@ -131,45 +202,81 @@ impl Render {
             queue,
             surface,
             binds: Arena::new(),
-            pipelines: Vec::new(),
+            pipelines: Arena::new(),
             meshes: Arena::new(),
+            textures: Arena::new(),
+            atlas_bind: None,
+            atlas: Atlas::new(),
+            rect_to_tex: HashMap::new(),
             instances: HashMap::new(),
             depth_texture,
         })
     }
 
-    pub fn add_pipeline(&mut self, pipeline: Pipeline) {
-        self.pipelines.push(pipeline);
+    pub fn add_pipeline(&mut self, pipeline: Pipeline) -> PipelineHandle {
+        PipelineHandle(self.pipelines.insert(pipeline))
     }
 
-    pub fn get_pipeline(&self, idx: usize) -> Result<&Pipeline> {
+    pub fn get_pipeline(&self, handle: PipelineHandle) -> Result<&Pipeline> {
         self.pipelines
-            .get(idx)
-            .ok_or(anyhow!("No pipeline found at index {}.", idx))
+            .get(handle.0)
+            .ok_or(anyhow!("No pipeline found at index {:?}.", handle))
     }
 
-    pub fn get_pipeline_mut(&mut self, idx: usize) -> Result<&mut Pipeline> {
+    pub fn get_pipeline_mut(&mut self, handle: PipelineHandle) -> Result<&mut Pipeline> {
         self.pipelines
-            .get_mut(idx)
-            .ok_or(anyhow!("No pipeline found at index {}.", idx))
+            .get_mut(handle.0)
+            .ok_or(anyhow!("No pipeline found at index {:?}.", handle))
     }
 
-    pub fn get_mesh(&self, mesh_handle: MeshHandle) -> Result<&(Mesh<Box<dyn Geometry>>, Buffer)> {
+    pub fn get_texture() -> Result<()> {
+        // TODO
+        Ok(())
+    }
+
+    pub fn add_texture(&mut self, texture: Texture) -> TextureHandle {
+        // whenever a texture gets added, we want to stitch it into the texture atlas and remember where it goes
+        // when we expand the material definition, it'll be able to reference textures via handle
+        let rect_handle = self.atlas.add(texture.width(), texture.height());
+        let texture_handle = TextureHandle(self.textures.insert(texture));
+        self.rect_to_tex.insert(rect_handle, texture_handle);
+        texture_handle
+    }
+
+    pub fn get_mesh(
+        &self,
+        mesh_handle: MeshHandle,
+    ) -> Result<&(
+        Mesh<Box<dyn Geometry>, Box<dyn Material>>,
+        Buffer,
+        Option<Buffer>,
+    )> {
         self.meshes
             .get(mesh_handle.0)
             .ok_or(anyhow!("Mesh not found for handle id {:?}", mesh_handle.0))
     }
 
-    pub fn add_mesh<T: Geometry + 'static, G: InstanceData>(
+    pub fn add_mesh<G: Geometry + 'static, I: InstanceData, M: Material + 'static>(
         &mut self,
-        mesh: Mesh<T>,
+        mesh: Mesh<G, M>,
     ) -> MeshHandle {
         let buffer = self.device.create_buffer_init(&BufferInitDescriptor {
             label: None,
-            contents: mesh.geometry.contents().as_ref(),
+            contents: mesh.geometry.contents(),
+            // contents: mesh.geometry.contents().as_ref(),
             usage: BufferUsages::VERTEX,
         });
-        MeshHandle(self.meshes.insert((mesh.boxed(), buffer)))
+        let index_buffer = if let Some(indices) = mesh.geometry.indices() {
+            let index_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
+                label: None,
+                contents: indices,
+                usage: BufferUsages::INDEX,
+            });
+            Some(index_buffer)
+        } else {
+            None
+        };
+        MeshHandle(self.meshes.insert((mesh.boxed(), buffer, index_buffer)))
     }
 
     pub fn add_instance<T: InstanceData + 'static>(
@@ -226,6 +333,10 @@ impl Render {
         &self.queue
     }
 
+    pub fn set_atlas(&mut self, handle: BindHandle, binding: u32) {
+        self.atlas_bind = Some((handle, binding));
+    }
+
     pub fn build_bind(&mut self, bg: &mut [BindEntry]) -> BindHandle {
         let layout_entries = bg
             .iter()
@@ -266,7 +377,7 @@ impl Render {
         self.add_bind(bind)
     }
 
-    pub fn add_bind(&mut self, bind: Bind) -> BindHandle {
+    fn add_bind(&mut self, bind: Bind) -> BindHandle {
         BindHandle(self.binds.insert(bind))
     }
 
@@ -283,6 +394,30 @@ impl Render {
     }
 
     pub fn draw(&mut self) {
+        if let Some((atlas_bind, binding)) = self.atlas_bind {
+            if self.atlas.needs_packing {
+                self.atlas.pack();
+                // update the atlas texture
+                let atlas_texture =
+                    Texture::from_atlas(&self.atlas, &self.rect_to_tex, &self.textures);
+                self.write_texture(
+                    &atlas_texture.data,
+                    ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(4 * atlas_texture.width),
+                        rows_per_image: None,
+                    },
+                    Extent3d {
+                        width: atlas_texture.width,
+                        height: atlas_texture.height,
+                        depth_or_array_layers: 1,
+                    },
+                    atlas_bind,
+                    binding,
+                );
+            }
+        }
+
         let frame = self.surface.get_current_texture().unwrap();
 
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
@@ -322,7 +457,7 @@ impl Render {
 
         let mut draw_map = HashMap::new();
 
-        for (idx, (mesh, buffer)) in &self.meshes {
+        for (idx, (mesh, buffer, index_buffer)) in &self.meshes {
             draw_map
                 .entry(mesh.material)
                 .or_insert(Vec::new())
@@ -339,15 +474,25 @@ impl Render {
 
             for mesh_handle in mesh_handles {
                 // get the mesh
-                let (mesh, vertex_buffer) = self.get_mesh(mesh_handle).expect("Mesh should exist");
+                let (mesh, vertex_buffer, index_buffer) =
+                    self.get_mesh(mesh_handle).expect("Mesh should exist");
                 // let vertex_data = mesh.geometry.contents();
 
                 // get all instances for this mesh handle
-                let (instances, instance_buffer) = self.instances.get(&mesh_handle).unwrap();
-
-                rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                rpass.set_vertex_buffer(1, instance_buffer.slice(..));
-                rpass.draw(0..mesh.geometry.length(), 0..instances.len() as u32);
+                if let Some((instances, instance_buffer)) = self.instances.get(&mesh_handle) {
+                    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    rpass.set_vertex_buffer(1, instance_buffer.slice(..));
+                    if let Some(index_buffer) = index_buffer {
+                        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                        rpass.draw_indexed(
+                            0..(index_buffer.size() as u32 / std::mem::size_of::<u16>() as u32),
+                            0,
+                            0..instances.len() as u32,
+                        )
+                    } else {
+                        rpass.draw(0..mesh.geometry.length(), 0..instances.len() as u32);
+                    }
+                }
                 // println!("{:?}", instances);
             }
         }
@@ -367,32 +512,19 @@ pub trait InstanceData: Debug {
 #[derive(Eq, Hash, PartialEq, Clone, Copy)]
 pub struct MeshHandle(pub Index);
 
-pub struct Mesh<T: Geometry> {
-    pub material: u32,
-    pub geometry: T,
+#[derive(Eq, Hash, PartialEq, Clone, Copy)]
+pub struct TextureHandle(pub Index);
+
+pub struct Mesh<G: Geometry, M: Material> {
+    pub material: M,
+    pub geometry: G,
 }
 
-impl<T: Geometry + 'static> Mesh<T> {
-    pub fn boxed(self) -> Mesh<Box<dyn Geometry>> {
+impl<T: Geometry + 'static, M: Material + 'static> Mesh<T, M> {
+    pub fn boxed(self) -> Mesh<Box<dyn Geometry>, Box<dyn Material>> {
         Mesh {
-            material: self.material,
+            material: Box::new(self.material),
             geometry: Box::new(self.geometry),
         }
-    }
-}
-
-pub trait Geometry {
-    fn contents(&self) -> Vec<u8>;
-
-    fn length(&self) -> u32;
-}
-
-impl Geometry for Box<dyn Geometry> {
-    fn contents(&self) -> Vec<u8> {
-        self.as_ref().contents()
-    }
-
-    fn length(&self) -> u32 {
-        self.as_ref().length()
     }
 }

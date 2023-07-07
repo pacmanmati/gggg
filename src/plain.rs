@@ -1,4 +1,3 @@
-
 /// A trait for plain structs which can be safely casted to bytes.
 ///
 /// # Safety
@@ -34,5 +33,16 @@ where
         use std::{mem, slice};
 
         unsafe { slice::from_raw_parts(self.as_ptr().cast(), mem::size_of_val(*self)) }
+    }
+}
+
+unsafe impl<T> Plain for Vec<T>
+where
+    T: Plain,
+{
+    fn as_bytes(&self) -> &[u8] {
+        use std::{mem, slice};
+
+        unsafe { slice::from_raw_parts(self.as_ptr().cast(), mem::size_of_val(self.as_slice())) }
     }
 }

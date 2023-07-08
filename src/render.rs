@@ -18,10 +18,15 @@ use crate::{
     atlas::{Atlas, RectHandle},
     bind::{Bind, BindEntry, BindEntryResource, BindHandle},
     geometry::Geometry,
+    instance::InstanceData,
     material::Material,
     pipeline::{Pipeline, PipelineHandle},
+    render_object::RenderObject,
     texture::Texture,
 };
+
+#[derive(PartialEq, Eq, Hash)]
+struct MeshAndPipelineHandleComposite(MeshHandle, PipelineHandle);
 
 // renderer draws meshes
 pub struct Render {
@@ -33,14 +38,36 @@ pub struct Render {
     binds: Arena<Bind>,
     meshes: Arena<(
         Mesh<Box<dyn Geometry>, Box<dyn Material>>,
-        Buffer,
-        Option<Buffer>,
+        Buffer,         // vertex
+        Option<Buffer>, // index
     )>,
     textures: Arena<Texture>,
     atlas_bind: Option<(BindHandle, u32)>,
     atlas: Atlas,
     rect_to_tex: HashMap<RectHandle, TextureHandle>,
-    instances: HashMap<MeshHandle, (Vec<Box<dyn InstanceData>>, Buffer)>,
+    instances: HashMap<
+        MeshHandle,
+        (
+            Vec<Box<dyn InstanceData>>,
+            Buffer, // instance
+        ),
+    >,
+    // we're in giga type hell now
+    render_objects: HashMap<
+        MeshAndPipelineHandleComposite,
+        (
+            Vec<
+                Box<
+                    dyn RenderObject<
+                        InstanceType = Box<dyn InstanceData>,
+                        GeometryType = Box<dyn Geometry>,
+                        MaterialType = Box<dyn Material>,
+                    >,
+                >,
+            >,
+            Buffer, // instance
+        ),
+    >,
     depth_texture: wgpu::Texture,
 }
 
@@ -209,6 +236,7 @@ impl Render {
             atlas: Atlas::new(),
             rect_to_tex: HashMap::new(),
             instances: HashMap::new(),
+            render_objects: HashMap::new(),
             depth_texture,
         })
     }
@@ -279,11 +307,7 @@ impl Render {
         MeshHandle(self.meshes.insert((mesh.boxed(), buffer, index_buffer)))
     }
 
-    pub fn add_instance<T: InstanceData + 'static>(
-        &mut self,
-        mesh_handle: MeshHandle,
-        instance: T,
-    ) {
+    fn add_instance<T: InstanceData + 'static>(&mut self, mesh_handle: MeshHandle, instance: T) {
         if let std::collections::hash_map::Entry::Vacant(e) = self.instances.entry(mesh_handle) {
             // create hashmap entry
             let new_buffer = self.device.create_buffer(&BufferDescriptor {
@@ -322,6 +346,57 @@ impl Render {
             self.queue
                 .write_buffer(buffer, offset as u64, instance.data());
             instances.push(Box::new(instance));
+        }
+    }
+
+    // a render object encapsulates all the information we need, including instance data
+    // one problem: we usually write the instance data in a buffer immediately. now we have instance data that can change (needs to be determined dynamically)
+    // this was always going to be the case. note that eventually we were going to make objects non-persistent in renderer storage, e.g. the instance data would be getting written to a buffer each frame (or so) anyway.
+    pub fn add_render_object<R: RenderObject>(&mut self, render_object: R) {
+        let instance = render_object.instance(self);
+        let mesh_handle = render_object.mesh_handle();
+        let pipeline_handle = render_object.pipeline_handle();
+        let key = MeshAndPipelineHandleComposite(mesh_handle, pipeline_handle);
+        // self.add_instance(render_object.mesh_handle(), instance);
+
+        if let std::collections::hash_map::Entry::Vacant(e) = self.render_objects.entry(key) {
+            // create hashmap entry
+            let new_buffer = self.device.create_buffer(&BufferDescriptor {
+                label: Some("Instance buffer"),
+                size: std::mem::size_of::<R::InstanceType>() as u64 * 10,
+                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let new_data = instance.data();
+            self.queue.write_buffer(&new_buffer, 0, new_data);
+            e.insert((vec![Box::new(render_object.boxed())], new_buffer));
+        } else {
+            let (instances, buffer) = self.render_objects.get_mut(&key).unwrap();
+            if buffer.size() < std::mem::size_of::<R::InstanceType>() as u64 {
+                // create a bigger buffer
+                let new_buffer = self.device.create_buffer(&BufferDescriptor {
+                    label: Some("Instance buffer"),
+                    size: buffer.size() + std::mem::size_of::<R::InstanceType>() as u64 * 10,
+                    usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                instances.push(Box::new(render_object.boxed()));
+                let new_data = instances.iter().fold(Vec::new(), |mut acc, instance| {
+                    acc.extend_from_slice(instance.instance(&self).data());
+                    acc
+                });
+                self.queue.write_buffer(&new_buffer, 0, new_data.as_slice());
+                self.instances.entry(mesh_handle).and_modify(|(_, buffer)| {
+                    let _ = std::mem::replace(buffer, new_buffer);
+                });
+
+                return;
+            }
+            let offset = instances.len() * std::mem::size_of::<R::InstanceType>();
+            // write this instance into the buffer, no need to resize
+            self.queue
+                .write_buffer(buffer, offset as u64, instance.data());
+            instances.push(Box::new(render_object.boxed()));
         }
     }
 
@@ -503,10 +578,6 @@ impl Render {
 
         frame.present();
     }
-}
-
-pub trait InstanceData: Debug {
-    fn data(&self) -> &[u8];
 }
 
 #[derive(Eq, Hash, PartialEq, Clone, Copy)]

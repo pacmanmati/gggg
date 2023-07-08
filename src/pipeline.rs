@@ -13,7 +13,7 @@ use crate::{
     render::Render,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct PipelineHandle(pub Index);
 
 /// An abstraction over wgpu pipelines that simplifies custom pipeline creation.

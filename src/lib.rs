@@ -4,6 +4,7 @@ pub mod camera;
 pub mod geometry;
 pub mod gltf;
 pub mod input;
+pub mod instance;
 pub mod material;
 pub mod pipeline;
 pub mod plain;

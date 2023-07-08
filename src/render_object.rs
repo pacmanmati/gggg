@@ -1,8 +1,9 @@
 use crate::{
-    geometry::Geometry,
-    material::Material,
+    geometry::{BasicGeometry, Geometry},
+    instance::{BasicInstance, InstanceData},
+    material::{BasicMaterial, Material},
     pipeline::PipelineHandle,
-    render::{InstanceData, Mesh, Render},
+    render::{MeshHandle, Render},
 };
 
 // A RenderObject defines how instance data is obtained from the renderer, mesh and material data for a particular pipeline.
@@ -19,12 +20,91 @@ pub trait RenderObject {
     type InstanceType: InstanceData;
     type GeometryType: Geometry + 'static;
     type MaterialType: Material + 'static;
-    fn instance_data(
+    fn instance(
         &self,
         render: &Render,
-        mesh: Mesh<Self::GeometryType, Self::MaterialType>,
+        // mesh: Mesh<Self::GeometryType, Self::MaterialType>,
     ) -> Self::InstanceType;
     fn pipeline_handle(&self) -> PipelineHandle;
-    fn geometry() -> Self::GeometryType;
-    fn material() -> Self::MaterialType;
+    fn mesh_handle(&self) -> MeshHandle;
+    fn boxed(self) -> BoxedRenderObject<Self::GeometryType, Self::InstanceType, Self::MaterialType>
+    // holy shit it works
+    where
+        Self: Sized,
+    {
+        BoxedRenderObject(Box::new(self))
+    }
+}
+
+// problem: we want to access the original render object's methods but we cannot store it. what do we do?
+// we cannot store Box<dyn RenderObject<...>> because we end up having to create a version of RenderObject with trait object associated types (which is what we need this struct for!)
+// we cannot call boxed recursively
+// we could store function pointers (lifetime / borrow issues? - we don't have the underlying data to refer to)
+// we can honestly store some of the data. eg. pipelinehandle, meshhandle. instance() is the only real problem.
+// can we store it as any? and downcast it? or can it be generic instead? - if it's a generic the boxedrenderobject requires generics too. is that a problem?
+// generics work!
+pub struct BoxedRenderObject<G, I, M>(
+    Box<dyn RenderObject<GeometryType = G, InstanceType = I, MaterialType = M>>,
+);
+
+// pub struct BoxedRenderObject(
+//     Box<
+//         dyn RenderObject<
+//             GeometryType = Box<dyn Geometry>,
+//             InstanceType = Box<dyn InstanceData>,
+//             MaterialType = Box<dyn Material>,
+//         >,
+//     >,
+// );
+
+impl<G: Geometry, I: InstanceData, M: Material> RenderObject for BoxedRenderObject<G, I, M> {
+    type InstanceType = Box<dyn InstanceData>;
+
+    type GeometryType = Box<dyn Geometry>;
+
+    type MaterialType = Box<dyn Material>;
+
+    fn instance(
+        &self,
+        render: &Render,
+        // mesh: Mesh<Self::GeometryType, Self::MaterialType>,
+    ) -> Self::InstanceType {
+        Box::new(self.0.as_ref().instance(render))
+    }
+
+    fn pipeline_handle(&self) -> PipelineHandle {
+        self.0.as_ref().pipeline_handle()
+    }
+
+    fn mesh_handle(&self) -> MeshHandle {
+        self.0.as_ref().mesh_handle()
+    }
+}
+
+pub struct BasicRenderObject {}
+
+impl RenderObject for BasicRenderObject {
+    type InstanceType = BasicInstance;
+
+    type GeometryType = BasicGeometry;
+
+    type MaterialType = BasicMaterial;
+
+    fn instance(
+        &self,
+        render: &Render,
+        // mesh: Mesh<Self::GeometryType, Self::MaterialType>,
+    ) -> Self::InstanceType {
+        todo!()
+    }
+
+    fn pipeline_handle(&self) -> PipelineHandle {
+        // TODO: we need to create a basic pipeline whose pipeline handle can be assumed
+        // e.g. we ensure that the basic pipeline is added first and its index is always 0
+        todo!()
+    }
+
+    fn mesh_handle(&self) -> MeshHandle {
+        todo!()
+    }
 }

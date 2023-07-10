@@ -1,17 +1,20 @@
 use std::num::NonZeroU32;
 
 use generational_arena::Index;
+use itertools::Itertools;
 use wgpu::{
-    BindGroup, BindGroupEntry, BindGroupLayout, BindGroupLayoutEntry, Buffer, BufferBinding,
-    BufferDescriptor, BufferUsages, Device, Extent3d, Sampler, SamplerBindingType,
-    SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture, TextureDescriptor,
-    TextureFormat, TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor,
-    TextureViewDimension, VertexAttribute, VertexBufferLayout, VertexStepMode,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, Buffer, BufferBinding, BufferDescriptor, BufferUsages, Device, Extent3d,
+    Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture,
+    TextureDescriptor, TextureFormat, TextureSampleType, TextureUsages, TextureView,
+    TextureViewDescriptor, TextureViewDimension, VertexAttribute, VertexBufferLayout,
+    VertexStepMode,
 };
 
 #[derive(Clone, Copy)]
 pub struct BindHandle(pub Index);
 
+#[derive(Clone, Copy)]
 pub enum BindEntryType {
     BufferUniform {
         size: u64,
@@ -47,12 +50,34 @@ pub enum BindEntryResource {
     Sampler(Sampler),
 }
 
+impl BindEntryResource {
+    pub fn buffer(&self) -> &Buffer {
+        match self {
+            BindEntryResource::Buffer(buffer) => buffer,
+            _ => unreachable!(),
+        }
+    }
+    pub fn sampler(&self) -> &Sampler {
+        match self {
+            BindEntryResource::Sampler(sampler) => sampler,
+            _ => unreachable!(),
+        }
+    }
+    pub fn texture_view(&self) -> (&Texture, &TextureView) {
+        match self {
+            BindEntryResource::Texture(texture, view) => (texture, view),
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct BindEntry {
     pub visibility: ShaderStages,
     pub ty: BindEntryType,
     pub count: Option<NonZeroU32>,
-    /// Pass as None. This will be removed.
-    pub resource: Option<BindEntryResource>,
+    // Pass as None. This will be removed.
+    // pub resource: Option<BindEntryResource>,
 }
 
 impl BindEntry {
@@ -76,9 +101,7 @@ impl BindEntry {
                     sample_type,
                     view_dimension,
                     sample_count,
-                    format,
-                    size,
-                    usage,
+                    ..
                 } => wgpu::BindingType::Texture {
                     sample_type,
                     view_dimension,
@@ -88,9 +111,7 @@ impl BindEntry {
                     access,
                     format,
                     view_dimension,
-                    sample_count,
-                    size,
-                    usage,
+                    ..
                 } => wgpu::BindingType::StorageTexture {
                     access,
                     format,
@@ -101,129 +122,180 @@ impl BindEntry {
         }
     }
 
-    pub fn group_entry(&mut self, binding: u32, device: &Device) -> BindGroupEntry {
-        BindGroupEntry {
-            binding,
-            resource: match self.ty {
-                BindEntryType::BufferUniform { size, usages }
-                | BindEntryType::BufferStorage { size, usages, .. } => {
-                    let buffer = self.buffer(device, size, usages);
-                    wgpu::BindingResource::Buffer(BufferBinding {
-                        buffer,
-                        offset: 0,
-                        size: None,
-                    })
-                }
-                BindEntryType::Sampler(ty) => {
-                    let sampler = self.sampler(device);
-                    wgpu::BindingResource::Sampler(sampler)
-                }
-                BindEntryType::Texture {
-                    sample_type,
-                    view_dimension,
-                    sample_count,
-                    format,
-                    size,
-                    usage,
-                } => {
-                    let (texture, view) =
-                        self.texture(device, size, sample_count, view_dimension, format, usage);
-
-                    wgpu::BindingResource::TextureView(view)
-                }
-                BindEntryType::StorageTexture {
-                    access,
-                    format,
-                    view_dimension,
-                    sample_count,
-                    size,
-                    usage,
-                } => {
-                    let (texture, view) =
-                        self.texture(device, size, sample_count, view_dimension, format, usage);
-
-                    wgpu::BindingResource::TextureView(view)
-                }
-            },
-        }
-    }
-
-    pub fn sampler(&mut self, device: &Device) -> &Sampler {
-        if let Some(ref resource) = self.resource {
-            match resource {
-                BindEntryResource::Sampler(sampler) => sampler,
-                _ => unreachable!(),
+    pub fn group_entry<'a>(
+        &'a self,
+        binding: u32,
+        // device: &Device,
+        resource: &'a BindEntryResource,
+    ) -> BindGroupEntry {
+        let binding_resource = match self.ty {
+            BindEntryType::BufferUniform { size, usages }
+            | BindEntryType::BufferStorage { size, usages, .. } => {
+                wgpu::BindingResource::Buffer(BufferBinding {
+                    buffer: resource.buffer(),
+                    offset: 0,
+                    size: None,
+                })
             }
-        } else {
-            let sampler = device.create_sampler(&SamplerDescriptor::default());
-            self.resource = Some(BindEntryResource::Sampler(sampler));
-            match self.resource.as_ref().unwrap() {
-                BindEntryResource::Sampler(sampler) => sampler,
-                _ => unreachable!(),
-            }
-        }
-    }
-
-    pub fn buffer(&mut self, device: &Device, size: u64, usage: BufferUsages) -> &Buffer {
-        if let Some(ref resource) = self.resource {
-            match resource {
-                BindEntryResource::Buffer(buffer) => buffer,
-                _ => unreachable!(),
-            }
-        } else {
-            let buffer = device.create_buffer(&BufferDescriptor {
-                label: None,
+            BindEntryType::Sampler(..) => wgpu::BindingResource::Sampler(resource.sampler()),
+            BindEntryType::Texture {
+                view_dimension,
+                sample_count,
+                format,
                 size,
                 usage,
-                mapped_at_creation: false,
-            });
-            self.resource = Some(BindEntryResource::Buffer(buffer));
-            match self.resource.as_ref().unwrap() {
-                BindEntryResource::Buffer(buffer) => buffer,
-                _ => unreachable!(),
-            }
+                ..
+            } => wgpu::BindingResource::TextureView(resource.texture_view().1),
+            BindEntryType::StorageTexture {
+                format,
+                view_dimension,
+                sample_count,
+                size,
+                usage,
+                ..
+            } => wgpu::BindingResource::TextureView(resource.texture_view().1),
+        };
+
+        BindGroupEntry {
+            binding,
+            resource: binding_resource,
         }
+    }
+
+    pub fn sampler(&self, device: &Device) -> Sampler {
+        device.create_sampler(&SamplerDescriptor::default())
+    }
+
+    pub fn buffer(&self, device: &Device, size: u64, usage: BufferUsages) -> Buffer {
+        device.create_buffer(&BufferDescriptor {
+            label: None,
+            size,
+            usage,
+            mapped_at_creation: false,
+        })
     }
 
     pub fn texture(
-        &mut self,
+        &self,
         device: &Device,
         size: Extent3d,
         sample_count: u32,
         view_dimension: TextureViewDimension,
         format: TextureFormat,
         usage: TextureUsages,
-    ) -> (&Texture, &TextureView) {
-        if let Some(ref resource) = self.resource {
-            match resource {
-                BindEntryResource::Texture(texture, view) => (texture, view),
-                _ => unreachable!(),
+    ) -> (Texture, TextureView) {
+        let texture = device.create_texture(&TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count,
+            dimension: view_dimension.compatible_texture_dimension(),
+            format,
+            usage,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&TextureViewDescriptor::default());
+        (texture, view)
+    }
+
+    pub fn binding_resource(&self, device: &Device) -> BindEntryResource {
+        match self.ty {
+            BindEntryType::BufferUniform { size, usages }
+            | BindEntryType::BufferStorage { size, usages, .. } => {
+                BindEntryResource::Buffer(self.buffer(device, size, usages))
             }
-        } else {
-            let texture = device.create_texture(&TextureDescriptor {
-                label: None,
-                size,
-                mip_level_count: 1,
+            BindEntryType::Sampler(..) => BindEntryResource::Sampler(self.sampler(device)),
+            BindEntryType::Texture {
+                view_dimension,
                 sample_count,
-                dimension: view_dimension.compatible_texture_dimension(),
                 format,
+                size,
                 usage,
-                view_formats: &[],
-            });
-            let view = texture.create_view(&TextureViewDescriptor::default());
-            self.resource = Some(BindEntryResource::Texture(texture, view));
-            match self.resource.as_ref().unwrap() {
-                BindEntryResource::Texture(sampler, view) => (sampler, view),
-                _ => unreachable!(),
+                ..
+            } => {
+                let (texture, view) =
+                    self.texture(device, size, sample_count, view_dimension, format, usage);
+                BindEntryResource::Texture(texture, view)
+            }
+            BindEntryType::StorageTexture {
+                format,
+                view_dimension,
+                sample_count,
+                size,
+                usage,
+                ..
+            } => {
+                let (texture, view) =
+                    self.texture(device, size, sample_count, view_dimension, format, usage);
+                BindEntryResource::Texture(texture, view)
             }
         }
     }
 }
 
 pub struct Bind {
-    pub bg: BindGroup,
+    pub bg: Option<BindGroup>,
     pub bgl: BindGroupLayout,
     pub resources: Vec<BindEntryResource>,
+    pub bind_entries: Vec<BindEntry>,
+}
+
+impl Bind {
+    pub fn new(mut bind_entries: Vec<BindEntry>, device: &Device) -> Self {
+        let layout_entries = bind_entries
+            .iter()
+            .enumerate()
+            .map(|(idx, g)| g.layout_entry(idx as u32))
+            .collect::<Vec<_>>();
+
+        let bgl = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &layout_entries,
+        });
+        let resources = bind_entries
+            .iter_mut()
+            .map(|g| g.binding_resource(device))
+            .collect_vec();
+
+        let mut bind = Self {
+            bg: None,
+            bgl,
+            resources,
+            bind_entries,
+        };
+
+        bind.create_bind_group(device);
+        bind
+    }
+
+    pub fn create_bind_group(&mut self, device: &Device) {
+        let group_entries = self
+            .bind_entries
+            .iter_mut()
+            .enumerate()
+            .map(|(idx, g)| g.group_entry(idx as u32, self.resources.get(idx).unwrap()))
+            .collect::<Vec<_>>();
+        let bg = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &self.bgl,
+            entries: &group_entries,
+        });
+        self.bg = Some(bg);
+    }
+
+    pub fn replace_resource(
+        &mut self,
+        new_resource: BindEntryResource,
+        binding: u32,
+        device: &Device,
+    ) {
+        let _ = std::mem::replace(
+            self.resources.get_mut(binding as usize).unwrap(),
+            new_resource,
+        );
+
+        self.create_bind_group(device);
+    }
 }
 
 pub struct VertexBufferEntry {

@@ -31,7 +31,7 @@ struct InstanceInput {
     @location(4) model_matrix_1: vec4<f32>,
     @location(5) model_matrix_2: vec4<f32>,
     @location(6) model_matrix_3: vec4<f32>,
-    @location(7) atlas_coords: vec4<u32>,
+    @location(7) atlas_coords: vec4<f32>,
 }
 
 struct VertexOutput {
@@ -40,6 +40,7 @@ struct VertexOutput {
     @location(1) uv: vec2<f32>,
     @location(2) normal: vec3<f32>,
     @location(3) world_normal: vec3<f32>,
+    @location(4) atlas_coords: vec4<f32>,
 }
 
 @vertex
@@ -59,22 +60,28 @@ fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     out.uv = vertex.uv;
     out.normal = vertex.normal;
     out.world_normal = normalize((model_matrix * vec4<f32>(vertex.normal, 0.0)).xyz);
+    out.atlas_coords = instance.atlas_coords;
 
     return out;
 }
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
+    let uv_start = in.atlas_coords.xy;
+    let uv_end = in.atlas_coords.zw;
+    var scale = uv_end - uv_start;
+    let scaled_uv = scale * in.uv + uv_start;
 
-    let object_color = textureSample(texture, samp, in.uv);
+    let object_color = textureSample(atlas_texture, samp, scaled_uv);
 
     let ambient_strength = 0.2;
     let ambient_color = vec3<f32>(0.1, 0.1, 0.1) * ambient_strength;
 
     let view_dir = normalize(camera.position - in.world_position);
 
+    var final_color = object_color.xyz;
     // var final_color = ambient_color * object_color.xyz;
-    var final_color = vec3<f32>(0.0);
+    // var final_color = vec3<f32>(0.0);
     for (var i = 0u; i < arrayLength(&lights); i++) {
         let light = lights[i];
         let light_dir = normalize(light.position.xyz - in.world_position);
@@ -94,5 +101,5 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         // // final_color += specular_color;
     }
 
-    return vec4<f32>(final_color, object_color.a);
+    return vec4<f32>(final_color, 1.0);
 }

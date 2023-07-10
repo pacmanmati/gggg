@@ -13,7 +13,7 @@ use crate::{
     render::Render,
 };
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct PipelineHandle(pub Index);
 
 /// An abstraction over wgpu pipelines that simplifies custom pipeline creation.
@@ -74,11 +74,6 @@ impl PipelineBuilder {
         self
     }
 
-    // pub fn with_bg(mut self, binds: Vec<BindEntry>) -> Self {
-    //     self.bgs.push(binds);
-    //     self
-    // }
-
     pub fn with_vb<T>(mut self, step_mode: VertexStepMode, attributes: &[VertexAttribute]) -> Self {
         self.vertex_entries.push(VertexBufferEntry {
             array_stride: std::mem::size_of::<T>() as u64,
@@ -87,50 +82,6 @@ impl PipelineBuilder {
         });
         self
     }
-
-    // fn build_bind(bg: &mut [BindEntry], device: &Device) -> Bind {
-    //     let layout_entries = bg
-    //         .iter()
-    //         .enumerate()
-    //         .map(|(idx, g)| g.layout_entry(idx as u32))
-    //         .collect::<Vec<_>>();
-
-    //     let bgl = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-    //         label: None,
-    //         entries: &layout_entries,
-    //     });
-
-    //     let group_entries = bg
-    //         .iter_mut()
-    //         .enumerate()
-    //         .map(|(idx, g)| g.group_entry(idx as u32, device))
-    //         .collect::<Vec<_>>();
-
-    //     let bind_groups = device.create_bind_group(&BindGroupDescriptor {
-    //         label: None,
-    //         layout: &bgl,
-    //         entries: &group_entries,
-    //     });
-
-    //     let resources = bg
-    //         .iter_mut()
-    //         .map(|entry| entry.resource.take().unwrap())
-    //         .collect();
-
-    //     Bind {
-    //         bg: bind_groups,
-    //         bgl,
-    //         resources,
-    //     }
-    // }
-
-    // fn build_binds(&mut self, device: &Device) -> Vec<Bind> {
-    //     let mut binds = Vec::new();
-    //     for bg in self.bgs.iter_mut() {
-    //         binds.push(PipelineBuilder::build_bind(bg, device));
-    //     }
-    //     binds
-    // }
 
     fn create_module(&self, device: &Device) -> ShaderModule {
         device.create_shader_module(ShaderModuleDescriptor {
@@ -145,12 +96,15 @@ impl PipelineBuilder {
     }
 
     pub fn build(&mut self, render: &Render) -> Pipeline {
-        // println!("{:?}", self.primitive_state);
-
         let bgls = self
             .binds
             .iter()
-            .map(|handle| &render.get_bind(*handle).unwrap().bgl)
+            .map(|handle| {
+                // Ref::map(render.get_bind(*handle).unwrap(), |bind| &bind.bgl),
+
+                let bind = render.get_bind(*handle).unwrap();
+                &bind.bgl
+            })
             .collect::<Vec<_>>();
 
         let pipeline_layout = render

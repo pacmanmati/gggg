@@ -13,33 +13,31 @@ pub struct Image {
 }
 
 pub struct Atlas {
-    // key_to_rect: Option<HashMap<T, Rect>>,
     rects: Arena<Rect>,
     pub width: u32,
     pub height: u32,
-    pub needs_packing: bool,
+    pub changed: bool,
 }
 
 impl Atlas {
     pub fn new() -> Self {
         Self {
-            // key_to_rect: None,
             rects: Arena::new(),
             width: 0,
             height: 0,
-            needs_packing: false,
+            changed: false,
         }
     }
 
     pub fn add(&mut self, w: u32, h: u32) -> RectHandle {
         let rect = Rect { x: 0, y: 0, w, h };
         let index = self.rects.insert(rect);
-        self.needs_packing = true;
+
         RectHandle(index)
     }
 
     pub fn pack(&mut self) {
-        self.needs_packing = false;
+        self.changed = true;
         // let's go for a fixed width to break on
         let mut x = 0;
         let mut y = 0;
@@ -50,11 +48,11 @@ impl Atlas {
             .rects
             .iter()
             .sorted_by(|a, b| b.1.partial_cmp(a.1).unwrap())
-            .rev()
+            // .rev()
             .collect::<Vec<_>>();
 
         let mut max_h = sorted_rects.first().unwrap().1.h;
-        for (idx, rect) in self.rects.iter_mut() {
+        for (_, rect) in self.rects.iter_mut() {
             // bounds check
             if x + rect.x + rect.w >= self.width {
                 y += max_h;

@@ -1,16 +1,15 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::collections::HashMap;
 
 use anyhow::{anyhow, Result};
 
 use generational_arena::{Arena, Index};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    Adapter, BindGroupDescriptor, BindGroupLayoutDescriptor, Buffer, BufferDescriptor,
-    BufferUsages, Color, CommandEncoderDescriptor, Device, DeviceDescriptor, Extent3d,
-    ImageDataLayout, Instance, Operations, Queue, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RequestAdapterOptions, Surface,
-    SurfaceConfiguration, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureViewDescriptor,
+    Adapter, Buffer, BufferDescriptor, BufferUsages, Color, CommandEncoderDescriptor, Device,
+    DeviceDescriptor, Extent3d, ImageCopyTexture, ImageDataLayout, Instance, Operations, Origin3d,
+    Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RequestAdapterOptions, Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureViewDescriptor,
 };
 use winit::window::Window;
 
@@ -25,13 +24,13 @@ use crate::{
     texture::Texture,
 };
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 struct MeshAndPipelineHandleComposite(MeshHandle, PipelineHandle);
 
 // renderer draws meshes
 pub struct Render {
     adapter: Adapter,
-    device: Device,
+    device: Option<Device>,
     queue: Queue,
     surface: Surface,
     pipelines: Arena<Pipeline>,
@@ -72,13 +71,16 @@ pub struct Render {
 }
 
 impl Render {
+    fn replace_resource(&mut self, resource: BindEntryResource, handle: BindHandle, binding: u32) {
+        let device = self.device.take();
+        let bind = self.get_bind_mut(handle).unwrap();
+        bind.replace_resource(resource, binding, device.as_ref().unwrap());
+        self.device = device;
+    }
+
     pub fn write_buffer(&mut self, data: &[u8], handle: BindHandle, binding: u32) {
-        let resource = self
-            .get_bind(handle)
-            .unwrap()
-            .resources
-            .get(binding as usize)
-            .unwrap();
+        let bind = self.get_bind(handle).unwrap();
+        let resource = bind.resources.get(binding as usize).unwrap();
         let buffer = match resource {
             BindEntryResource::Buffer(buffer) => buffer,
             _ => unreachable!(),
@@ -94,24 +96,20 @@ impl Render {
         handle: BindHandle,
         binding: u32,
     ) {
-        let resource = self
-            .get_bind(handle)
-            .unwrap()
-            .resources
-            .get(binding as usize)
-            .unwrap();
+        let bind = self.get_bind(handle).unwrap();
+        let resource = bind.resources.get(binding as usize).unwrap();
 
         let texture = match resource {
             BindEntryResource::Texture(texture, ..) => texture,
             _ => unreachable!(),
         };
 
-        // offset is in bytes (one byte represents one pixel in the case of rgba8)
+        // offset is in bytes (four bytes represents one pixel in the case of rgba8)
         // TODO: support different texture types
-        let x = data_layout.offset % data_layout.bytes_per_row.unwrap() as u64;
-        let y = data_layout.offset / data_layout.bytes_per_row.unwrap() as u64;
-        let overflow_x = x + size.width as u64 - texture.width() as u64;
-        let overflow_y = y + size.height as u64 - texture.height() as u64;
+        let x = data_layout.offset * 4 % data_layout.bytes_per_row.unwrap() as u64;
+        let y = data_layout.offset * 4 / data_layout.bytes_per_row.unwrap() as u64;
+        let overflow_x = x as i64 + size.width as i64 - texture.width() as i64;
+        let overflow_y = y as i64 + size.height as i64 - texture.height() as i64;
 
         if overflow_x > 0 || overflow_y > 0 {
             let new_size = Extent3d {
@@ -122,50 +120,25 @@ impl Render {
             let descriptor = TextureDescriptor {
                 label: None,
                 size: new_size,
-                mip_level_count: texture.mip_level_count().to_owned(),
-                sample_count: texture.sample_count().to_owned(),
-                dimension: texture.dimension().to_owned(),
-                format: texture.format().to_owned(),
-                usage: texture.usage().to_owned(),
+                mip_level_count: texture.mip_level_count(),
+                sample_count: texture.sample_count(),
+                dimension: texture.dimension(),
+                format: texture.format(),
+                usage: texture.usage(),
                 view_formats: &[],
             };
 
-            let new_texture = self.device.create_texture(&descriptor);
+            let new_texture =
+                self.device()
+                    .create_texture_with_data(&self.queue, &descriptor, data);
 
-            let resource = self
-                .get_bind_mut(handle)
-                .unwrap()
-                .resources
-                .get_mut(binding as usize)
-                .unwrap();
-
-            let texture = match resource {
-                BindEntryResource::Texture(texture, ..) => texture,
-                _ => unreachable!(),
-            };
-
-            let _ = std::mem::replace(texture, new_texture);
-
-            // rust hell. you must drop the mutable borrow for an immutable one before borrowing self.queue
-            let resource = self
-                .get_bind(handle)
-                .unwrap()
-                .resources
-                .get(binding as usize)
-                .unwrap();
-
-            let texture = match resource {
-                BindEntryResource::Texture(texture, ..) => texture,
-                _ => unreachable!(),
-            };
-
+            let view = new_texture.create_view(&TextureViewDescriptor::default());
+            let resource = BindEntryResource::Texture(new_texture, view);
+            self.replace_resource(resource, handle, binding);
+        } else {
             self.queue
                 .write_texture(texture.as_image_copy(), data, data_layout, size);
-            return;
         }
-
-        self.queue
-            .write_texture(texture.as_image_copy(), data, data_layout, size);
     }
 
     pub fn new(window: &Window) -> Result<Self> {
@@ -180,7 +153,7 @@ impl Render {
                     ..Default::default()
                 })
                 .await
-                .ok_or(anyhow!("asd"))?;
+                .ok_or(anyhow!("No suitable adapter found."))?;
 
             let (device, queue) = adapter
                 .request_device(&DeviceDescriptor::default(), None)
@@ -225,7 +198,7 @@ impl Render {
 
         Ok(Self {
             adapter,
-            device,
+            device: Some(device),
             queue,
             surface,
             binds: Arena::new(),
@@ -257,6 +230,23 @@ impl Render {
             .ok_or(anyhow!("No pipeline found at index {:?}.", handle))
     }
 
+    /// Returns [x, y, x, y] for top left and top right. These values are fractional and represent where this texture is contained on the atlas_texture.
+    pub fn get_atlas_coords_for_texture(&self, texture_handle: TextureHandle) -> [f32; 4] {
+        let tex_to_rect = self
+            .rect_to_tex
+            .iter()
+            .map(|(rect, tex)| (tex, rect))
+            .collect::<HashMap<_, _>>();
+        let rect_handle = **tex_to_rect.get(&texture_handle).unwrap();
+        let rect = self.atlas.get_rect(rect_handle).unwrap();
+        [
+            rect.x as f32 / self.atlas.width as f32,
+            rect.y as f32 / self.atlas.height as f32,
+            (rect.x as f32 + rect.w as f32) / self.atlas.width as f32,
+            (rect.y as f32 + rect.h as f32) / self.atlas.height as f32,
+        ]
+    }
+
     pub fn get_texture() -> Result<()> {
         // TODO
         Ok(())
@@ -268,6 +258,7 @@ impl Render {
         let rect_handle = self.atlas.add(texture.width(), texture.height());
         let texture_handle = TextureHandle(self.textures.insert(texture));
         self.rect_to_tex.insert(rect_handle, texture_handle);
+        self.atlas.pack();
         texture_handle
     }
 
@@ -288,18 +279,26 @@ impl Render {
         &mut self,
         mesh: Mesh<G, M>,
     ) -> MeshHandle {
-        let buffer = self.device.create_buffer_init(&BufferInitDescriptor {
-            label: None,
-            contents: mesh.geometry.contents(),
-            // contents: mesh.geometry.contents().as_ref(),
-            usage: BufferUsages::VERTEX,
-        });
-        let index_buffer = if let Some(indices) = mesh.geometry.indices() {
-            let index_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
+        let buffer = self
+            .device
+            .as_ref()
+            .unwrap()
+            .create_buffer_init(&BufferInitDescriptor {
                 label: None,
-                contents: indices,
-                usage: BufferUsages::INDEX,
+                contents: mesh.geometry.contents(),
+                // contents: mesh.geometry.contents().as_ref(),
+                usage: BufferUsages::VERTEX,
             });
+        let index_buffer = if let Some(indices) = mesh.geometry.indices() {
+            let index_buffer =
+                self.device
+                    .as_ref()
+                    .unwrap()
+                    .create_buffer_init(&BufferInitDescriptor {
+                        label: None,
+                        contents: indices,
+                        usage: BufferUsages::INDEX,
+                    });
             Some(index_buffer)
         } else {
             None
@@ -310,12 +309,16 @@ impl Render {
     fn add_instance<T: InstanceData + 'static>(&mut self, mesh_handle: MeshHandle, instance: T) {
         if let std::collections::hash_map::Entry::Vacant(e) = self.instances.entry(mesh_handle) {
             // create hashmap entry
-            let new_buffer = self.device.create_buffer(&BufferDescriptor {
-                label: Some("Instance buffer"),
-                size: std::mem::size_of::<T>() as u64 * 10,
-                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
+            let new_buffer = self
+                .device
+                .as_ref()
+                .unwrap()
+                .create_buffer(&BufferDescriptor {
+                    label: Some("Instance buffer"),
+                    size: std::mem::size_of::<T>() as u64 * 10,
+                    usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
             let new_data = instance.data();
             self.queue.write_buffer(&new_buffer, 0, new_data);
             e.insert((vec![Box::new(instance)], new_buffer));
@@ -323,12 +326,16 @@ impl Render {
             let (instances, buffer) = self.instances.get_mut(&mesh_handle).unwrap();
             if buffer.size() < std::mem::size_of::<T>() as u64 {
                 // create a bigger buffer
-                let new_buffer = self.device.create_buffer(&BufferDescriptor {
-                    label: Some("Instance buffer"),
-                    size: buffer.size() + std::mem::size_of::<T>() as u64 * 10,
-                    usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
+                let new_buffer = self
+                    .device
+                    .as_ref()
+                    .unwrap()
+                    .create_buffer(&BufferDescriptor {
+                        label: Some("Instance buffer"),
+                        size: buffer.size() + std::mem::size_of::<T>() as u64 * 10,
+                        usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    });
                 instances.push(Box::new(instance));
                 let new_data = instances.iter().fold(Vec::new(), |mut acc, instance| {
                     acc.extend_from_slice(instance.data());
@@ -352,7 +359,7 @@ impl Render {
     // a render object encapsulates all the information we need, including instance data
     // one problem: we usually write the instance data in a buffer immediately. now we have instance data that can change (needs to be determined dynamically)
     // this was always going to be the case. note that eventually we were going to make objects non-persistent in renderer storage, e.g. the instance data would be getting written to a buffer each frame (or so) anyway.
-    pub fn add_render_object<R: RenderObject>(&mut self, render_object: R) {
+    pub fn add_render_object<R: RenderObject + 'static>(&mut self, render_object: R) {
         let instance = render_object.instance(self);
         let mesh_handle = render_object.mesh_handle();
         let pipeline_handle = render_object.pipeline_handle();
@@ -361,12 +368,16 @@ impl Render {
 
         if let std::collections::hash_map::Entry::Vacant(e) = self.render_objects.entry(key) {
             // create hashmap entry
-            let new_buffer = self.device.create_buffer(&BufferDescriptor {
-                label: Some("Instance buffer"),
-                size: std::mem::size_of::<R::InstanceType>() as u64 * 10,
-                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
+            let new_buffer = self
+                .device
+                .as_ref()
+                .unwrap()
+                .create_buffer(&BufferDescriptor {
+                    label: Some("Instance buffer"),
+                    size: std::mem::size_of::<R::InstanceType>() as u64 * 10,
+                    usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
             let new_data = instance.data();
             self.queue.write_buffer(&new_buffer, 0, new_data);
             e.insert((vec![Box::new(render_object.boxed())], new_buffer));
@@ -374,15 +385,20 @@ impl Render {
             let (instances, buffer) = self.render_objects.get_mut(&key).unwrap();
             if buffer.size() < std::mem::size_of::<R::InstanceType>() as u64 {
                 // create a bigger buffer
-                let new_buffer = self.device.create_buffer(&BufferDescriptor {
-                    label: Some("Instance buffer"),
-                    size: buffer.size() + std::mem::size_of::<R::InstanceType>() as u64 * 10,
-                    usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
+                let new_buffer = self
+                    .device
+                    .as_ref()
+                    .unwrap()
+                    .create_buffer(&BufferDescriptor {
+                        label: Some("Instance buffer"),
+                        size: buffer.size() + std::mem::size_of::<R::InstanceType>() as u64 * 10,
+                        usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    });
                 instances.push(Box::new(render_object.boxed()));
+                let (instances, buffer) = self.render_objects.get(&key).unwrap();
                 let new_data = instances.iter().fold(Vec::new(), |mut acc, instance| {
-                    acc.extend_from_slice(instance.instance(&self).data());
+                    acc.extend_from_slice(instance.instance(self).data());
                     acc
                 });
                 self.queue.write_buffer(&new_buffer, 0, new_data.as_slice());
@@ -401,7 +417,7 @@ impl Render {
     }
 
     pub fn device(&self) -> &Device {
-        &self.device
+        self.device.as_ref().unwrap()
     }
 
     pub fn queue(&self) -> &Queue {
@@ -412,43 +428,8 @@ impl Render {
         self.atlas_bind = Some((handle, binding));
     }
 
-    pub fn build_bind(&mut self, bg: &mut [BindEntry]) -> BindHandle {
-        let layout_entries = bg
-            .iter()
-            .enumerate()
-            .map(|(idx, g)| g.layout_entry(idx as u32))
-            .collect::<Vec<_>>();
-
-        let bgl = self
-            .device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: None,
-                entries: &layout_entries,
-            });
-
-        let group_entries = bg
-            .iter_mut()
-            .enumerate()
-            .map(|(idx, g)| g.group_entry(idx as u32, &self.device))
-            .collect::<Vec<_>>();
-
-        let bind_groups = self.device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &bgl,
-            entries: &group_entries,
-        });
-
-        let resources = bg
-            .iter_mut()
-            .map(|entry| entry.resource.take().unwrap())
-            .collect();
-
-        let bind = Bind {
-            bg: bind_groups,
-            bgl,
-            resources,
-        };
-
+    pub fn build_bind(&mut self, bind_entries: &mut [BindEntry]) -> BindHandle {
+        let bind = Bind::new(bind_entries.to_vec(), self.device.as_ref().unwrap());
         self.add_bind(bind)
     }
 
@@ -469,43 +450,35 @@ impl Render {
     }
 
     pub fn draw(&mut self) {
-        if let Some((atlas_bind, binding)) = self.atlas_bind {
-            if self.atlas.needs_packing {
-                self.atlas.pack();
-                // update the atlas texture
-                let atlas_texture =
-                    Texture::from_atlas(&self.atlas, &self.rect_to_tex, &self.textures);
-                self.write_texture(
-                    &atlas_texture.data,
-                    ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4 * atlas_texture.width),
-                        rows_per_image: None,
-                    },
-                    Extent3d {
-                        width: atlas_texture.width,
-                        height: atlas_texture.height,
-                        depth_or_array_layers: 1,
-                    },
-                    atlas_bind,
-                    binding,
-                );
-            }
-        }
-
         let frame = self.surface.get_current_texture().unwrap();
 
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
 
         let mut encoder = self
             .device
+            .as_ref()
+            .unwrap()
             .create_command_encoder(&CommandEncoderDescriptor::default());
 
         let depth_texture_view = &self
             .depth_texture
             .create_view(&TextureViewDescriptor::default());
 
-        let mut rpass = encoder.begin_render_pass(&RenderPassDescriptor {
+        // so now i think of draw map as a hashmap of hashmaps
+        // because the hierarchy goes like this (to minimise state changes)
+        // bind pipeline -> bind vertex/index buffer -> draw instances for some buffer
+        // which means we want to do a HashMap<PipelineHandle, HashMap<MeshHandle, (num_instances, instance_buffer)>>
+        let mut draw_map: HashMap<PipelineHandle, HashMap<MeshHandle, (u32, &Buffer)>> =
+            HashMap::new();
+
+        for (key, (render_objects, buffer)) in &self.render_objects {
+            draw_map
+                .entry(key.1)
+                .or_insert(HashMap::new())
+                .insert(key.0, (render_objects.len() as u32, buffer));
+        }
+
+        let mut rpass: wgpu::RenderPass<'_> = encoder.begin_render_pass(&RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &view,
@@ -530,45 +503,32 @@ impl Render {
             }),
         });
 
-        let mut draw_map = HashMap::new();
-
-        for (idx, (mesh, buffer, index_buffer)) in &self.meshes {
-            draw_map
-                .entry(mesh.material)
-                .or_insert(Vec::new())
-                .push(MeshHandle(idx));
-        }
-
-        for (material, mesh_handles) in draw_map {
-            let pipeline = self.pipelines.get(material as usize).unwrap();
+        for (pipeline_handle, meshes_and_render_objects) in draw_map.iter() {
+            let pipeline = self.pipelines.get(pipeline_handle.0).unwrap();
             rpass.set_pipeline(&pipeline.pipeline);
             for (idx, handle) in pipeline.binds.iter().enumerate() {
                 let bind = self.get_bind(*handle).unwrap();
-                rpass.set_bind_group(idx as u32, &bind.bg, &[]);
+                let bg = &bind.bg;
+                rpass.set_bind_group(idx as u32, bg.as_ref().unwrap(), &[]);
             }
 
-            for mesh_handle in mesh_handles {
+            for (mesh_handle, (num_instances, instance_buffer)) in meshes_and_render_objects {
                 // get the mesh
                 let (mesh, vertex_buffer, index_buffer) =
-                    self.get_mesh(mesh_handle).expect("Mesh should exist");
-                // let vertex_data = mesh.geometry.contents();
+                    self.get_mesh(*mesh_handle).expect("Mesh should exist");
 
-                // get all instances for this mesh handle
-                if let Some((instances, instance_buffer)) = self.instances.get(&mesh_handle) {
-                    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                    rpass.set_vertex_buffer(1, instance_buffer.slice(..));
-                    if let Some(index_buffer) = index_buffer {
-                        rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                        rpass.draw_indexed(
-                            0..(index_buffer.size() as u32 / std::mem::size_of::<u16>() as u32),
-                            0,
-                            0..instances.len() as u32,
-                        )
-                    } else {
-                        rpass.draw(0..mesh.geometry.length(), 0..instances.len() as u32);
-                    }
+                rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                rpass.set_vertex_buffer(1, instance_buffer.slice(..));
+                if let Some(index_buffer) = index_buffer {
+                    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    rpass.draw_indexed(
+                        0..(index_buffer.size() as u32 / std::mem::size_of::<u16>() as u32),
+                        0,
+                        0..*num_instances,
+                    )
+                } else {
+                    rpass.draw(0..mesh.geometry.length(), 0..*num_instances);
                 }
-                // println!("{:?}", instances);
             }
         }
 
@@ -577,6 +537,40 @@ impl Render {
         self.queue.submit([encoder.finish()]);
 
         frame.present();
+
+        self.render_objects.clear();
+
+        if let Some((atlas_bind, binding)) = self.atlas_bind {
+            if self.atlas.changed {
+                self.atlas.pack();
+                self.atlas.changed = false;
+                // update the atlas texture
+                let atlas_texture =
+                    Texture::from_atlas(&self.atlas, &self.rect_to_tex, &self.textures);
+                // let _ = image::save_buffer(
+                //     "atlas.png",
+                //     &atlas_texture.data,
+                //     atlas_texture.width,
+                //     atlas_texture.height,
+                //     image::ColorType::Rgba8,
+                // );
+                self.write_texture(
+                    &atlas_texture.data,
+                    ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(4 * atlas_texture.width),
+                        rows_per_image: None,
+                    },
+                    Extent3d {
+                        width: atlas_texture.width,
+                        height: atlas_texture.height,
+                        depth_or_array_layers: 1,
+                    },
+                    atlas_bind,
+                    binding,
+                );
+            }
+        }
     }
 }
 

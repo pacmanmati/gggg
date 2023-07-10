@@ -1,9 +1,11 @@
+use nalgebra::Matrix4;
+
 use crate::{
     geometry::{BasicGeometry, Geometry},
     instance::{BasicInstance, InstanceData},
     material::{BasicMaterial, Material},
     pipeline::PipelineHandle,
-    render::{MeshHandle, Render},
+    render::{MeshHandle, Render, TextureHandle},
 };
 
 // A RenderObject defines how instance data is obtained from the renderer, mesh and material data for a particular pipeline.
@@ -30,7 +32,7 @@ pub trait RenderObject {
     fn boxed(self) -> BoxedRenderObject<Self::GeometryType, Self::InstanceType, Self::MaterialType>
     // holy shit it works
     where
-        Self: Sized,
+        Self: Sized + 'static,
     {
         BoxedRenderObject(Box::new(self))
     }
@@ -57,7 +59,9 @@ pub struct BoxedRenderObject<G, I, M>(
 //     >,
 // );
 
-impl<G: Geometry, I: InstanceData, M: Material> RenderObject for BoxedRenderObject<G, I, M> {
+impl<G: Geometry + 'static, I: InstanceData + 'static, M: Material + 'static> RenderObject
+    for BoxedRenderObject<G, I, M>
+{
     type InstanceType = Box<dyn InstanceData>;
 
     type GeometryType = Box<dyn Geometry>;
@@ -81,7 +85,14 @@ impl<G: Geometry, I: InstanceData, M: Material> RenderObject for BoxedRenderObje
     }
 }
 
-pub struct BasicRenderObject {}
+pub struct BasicRenderObject {
+    // TODO: maybe move pipeline handle into material?
+    pub pipeline_handle: PipelineHandle,
+    pub mesh_handle: MeshHandle,
+    pub transform: Matrix4<f32>,
+    // TODO: move texture into material. replace with material_handle
+    pub texture_handle: TextureHandle,
+}
 
 impl RenderObject for BasicRenderObject {
     type InstanceType = BasicInstance;
@@ -90,21 +101,22 @@ impl RenderObject for BasicRenderObject {
 
     type MaterialType = BasicMaterial;
 
-    fn instance(
-        &self,
-        render: &Render,
-        // mesh: Mesh<Self::GeometryType, Self::MaterialType>,
-    ) -> Self::InstanceType {
-        todo!()
+    fn instance(&self, render: &Render) -> Self::InstanceType {
+        let atlas_coords = render.get_atlas_coords_for_texture(self.texture_handle);
+        // println!("{:?}", atlas_coords);
+        BasicInstance {
+            transform: self.transform,
+            atlas_coords: atlas_coords.into(),
+        }
     }
 
     fn pipeline_handle(&self) -> PipelineHandle {
         // TODO: we need to create a basic pipeline whose pipeline handle can be assumed
         // e.g. we ensure that the basic pipeline is added first and its index is always 0
-        todo!()
+        self.pipeline_handle
     }
 
     fn mesh_handle(&self) -> MeshHandle {
-        todo!()
+        self.mesh_handle
     }
 }

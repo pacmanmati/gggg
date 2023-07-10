@@ -1,20 +1,19 @@
 use gggg::{
     bind::{BindEntry, BindEntryType, BindHandle},
     camera::{Camera, ProjectionType},
-    geometry::{BasicGeometry, Geometry},
-    gltf::load_mesh,
-    pipeline::PipelineBuilder,
+    geometry::Geometry,
+    instance::InstanceData,
+    material::BasicMaterial,
+    pipeline::{PipelineBuilder, PipelineHandle},
     plain::Plain,
-    render::{InstanceData, Mesh, Render, RenderObject},
+    render::{Mesh, MeshHandle, Render, TextureHandle},
+    render_object::BasicRenderObject,
     texture::Texture,
     window::{make_window, AppLoop},
 };
-use image::{io::Reader, EncodableLayout};
 use nalgebra::{point, Matrix4, Translation3, Vector4};
-use wgpu::{
-    vertex_attr_array, BufferUsages, Extent3d, ImageDataLayout, ShaderStages, TextureUsages,
-};
-use winit::window::Window;
+use wgpu::{vertex_attr_array, BufferUsages, Extent3d, ShaderStages, TextureUsages};
+use winit::{event::VirtualKeyCode, window::Window};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -135,17 +134,17 @@ struct CameraUniform {
 
 unsafe impl Plain for CameraUniform {}
 
-struct CustomRenderObject {}
+// struct CustomRenderObject {}
 
-impl RenderObject for CustomRenderObject {
-    type InstanceType = Instance;
+// impl RenderObject for CustomRenderObject {
+//     type InstanceType = Instance;
 
-    type GeometryType = Cube;
+//     type GeometryType = Cube;
 
-    fn instance_data(render: &Render, mesh: Mesh<Self::GeometryType>) -> Self::InstanceType {
-        todo!()
-    }
-}
+//     fn instance_data(render: &Render, mesh: Mesh<Self::GeometryType>) -> Self::InstanceType {
+//         todo!()
+//     }
+// }
 
 struct App {
     render: Render,
@@ -154,6 +153,10 @@ struct App {
     rot_x: f32,
     camera_distance: f32,
     defaults_bind: BindHandle,
+    pipeline_handle: PipelineHandle,
+    cube_handle: MeshHandle,
+    cobble_handle: TextureHandle,
+    stone_handle: TextureHandle,
 }
 
 impl App {
@@ -218,7 +221,6 @@ impl AppLoop for App {
                 },
 
                 count: None,
-                resource: None,
             },
             BindEntry {
                 visibility: ShaderStages::FRAGMENT,
@@ -228,21 +230,20 @@ impl AppLoop for App {
                     sample_count: 1,
                     format: wgpu::TextureFormat::Rgba8Unorm,
                     size: Extent3d {
-                        width: 1,
-                        height: 1,
+                        width: 512,
+                        height: 100,
                         depth_or_array_layers: 1,
                     },
                     usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
                 },
                 count: None,
-                resource: None,
             },
         ]);
 
         render.set_atlas(defaults_bind, 1);
 
-        let cobble_tex = Texture::from_path("cobble.png");
-        let stone_tex = Texture::from_path("stone.png");
+        let cobble_tex = Texture::from_path("red.png");
+        let stone_tex = Texture::from_path("green.png");
 
         let cobble_handle = render.add_texture(cobble_tex);
         let stone_handle = render.add_texture(stone_tex);
@@ -251,7 +252,6 @@ impl AppLoop for App {
             visibility: ShaderStages::FRAGMENT,
             ty: BindEntryType::Sampler(wgpu::SamplerBindingType::NonFiltering),
             count: None,
-            resource: None,
         }]);
 
         let lights = vec![
@@ -283,7 +283,6 @@ impl AppLoop for App {
             //     usages: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             // },
             count: None,
-            resource: None,
         }]);
 
         render.write_buffer(light_data.as_bytes(), lights_bind_handle, 0);
@@ -301,7 +300,7 @@ impl AppLoop for App {
             )
             .with_vb::<Instance>(
                 wgpu::VertexStepMode::Instance,
-                &vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32x4, 7 => Uint32x4],
+                &vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32x4, 7 => Float32x4],
             )
             .build(&render);
 
@@ -325,27 +324,25 @@ impl AppLoop for App {
         //     0,
         // );
 
-        render.add_pipeline(pipeline);
+        let pipeline_handle = render.add_pipeline(pipeline);
 
         let cube_mesh = Mesh {
-            material: 0,
+            material: BasicMaterial {},
             geometry: Cube::new(),
         };
 
-        let cube_handle = render.add_mesh::<Cube, Instance>(cube_mesh);
+        let cube_handle = render.add_mesh::<Cube, Instance, BasicMaterial>(cube_mesh);
 
-        let house_meshes = load_mesh("biplane_painted.glb").unwrap();
+        // let house_meshes = load_mesh("jet.glb").unwrap();
 
         // for mesh in house_meshes {
-        //     let house_mesh_handle = render.add_mesh::<BasicGeometry, Instance>(mesh);
-
-        //     render.add_instance(
-        //         house_mesh_handle,
-        //         Instance {
-        //             transform: Translation3::new(0.0, -1.0, -2.0).to_homogeneous(),
-        //             atlas_coords: Vector4::new(0, 0, 0, 0),
-        //         },
-        //     );
+        //     let house_mesh_handle = render.add_mesh::<BasicGeometry, Instance, BasicMaterial>(mesh);
+        //     render.add_render_object(BasicRenderObject {
+        //         pipeline_handle,
+        //         mesh_handle: house_mesh_handle,
+        //         transform: Translation3::new(0.0, -1.0, -2.0).to_homogeneous(),
+        //         texture_handle: stone_handle,
+        //     });
         // }
 
         // how do we go from texture_handle -> atlas_coords?
@@ -358,21 +355,21 @@ impl AppLoop for App {
         //
         //
 
-        render.add_instance(
-            cube_handle,
-            Instance {
-                transform: Translation3::new(0.0, 0.0, 0.0).to_homogeneous(),
-                atlas_coords: Vector4::new(0, 0, 0, 0),
-            },
-        );
+        // render.add_instance(
+        //     cube_handle,
+        //     Instance {
+        //         transform: Translation3::new(0.0, 0.0, 0.0).to_homogeneous(),
+        //         atlas_coords: Vector4::new(0, 0, 0, 0),
+        //     },
+        // );
 
-        render.add_instance(
-            cube_handle,
-            Instance {
-                transform: Translation3::new(1.0, 0.0, 0.0).to_homogeneous(),
-                atlas_coords: Vector4::new(0, 0, 0, 0),
-            },
-        );
+        // render.add_instance(
+        //     cube_handle,
+        //     Instance {
+        //         transform: Translation3::new(1.0, 0.0, 0.0).to_homogeneous(),
+        //         atlas_coords: Vector4::new(0, 0, 0, 0),
+        //     },
+        // );
 
         Self {
             render,
@@ -381,16 +378,44 @@ impl AppLoop for App {
             rot_x: 0.0,
             camera_distance: 5.0,
             defaults_bind,
+            pipeline_handle,
+            cube_handle,
+            cobble_handle,
+            stone_handle,
         }
     }
 
     fn draw(&mut self) {
+        self.render.add_render_object(BasicRenderObject {
+            pipeline_handle: self.pipeline_handle,
+            mesh_handle: self.cube_handle,
+            transform: Translation3::new(0.0, 0.0, 0.0).to_homogeneous(),
+            texture_handle: self.cobble_handle,
+        });
+
+        self.render.add_render_object(BasicRenderObject {
+            pipeline_handle: self.pipeline_handle,
+            mesh_handle: self.cube_handle,
+            transform: Translation3::new(1.0, 0.0, 0.0).to_homogeneous(),
+            texture_handle: self.stone_handle,
+        });
+
         self.render.draw();
     }
 
     fn input(&mut self, input: gggg::input::InputEvent) {
         // println!("{:?}", input);
         match input {
+            gggg::input::InputEvent::KeyboardInput { key, pressed } => {
+                if key == VirtualKeyCode::Q {
+                    self.zoom_camera((0.0, 10.0));
+                } else if key == VirtualKeyCode::E {
+                    self.zoom_camera((0.0, -10.0));
+                } else if key == VirtualKeyCode::T && pressed {
+                    let texture = Texture::from_path("red.png");
+                    self.render.add_texture(texture);
+                }
+            }
             gggg::input::InputEvent::MouseInput(input) => match input {
                 // gggg::input::MouseInputEvent::MouseMovement { delta } => self.move_camera(delta),
                 gggg::input::MouseInputEvent::MouseScroll { delta } => self.move_camera(delta),
@@ -402,5 +427,8 @@ impl AppLoop for App {
 }
 
 fn main() {
-    make_window().with_title("hello").run(App::init);
+    make_window()
+        .with_window_size((700, 700))
+        .with_title("hello")
+        .run(App::init);
 }

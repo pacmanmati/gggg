@@ -17,8 +17,8 @@ impl InstanceData for Box<dyn InstanceData> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct BasicInstance {
-    transform: Matrix4<f32>,
-    atlas_coords: Vector4<u32>,
+    pub transform: Matrix4<f32>,
+    pub atlas_coords: Vector4<f32>,
 }
 
 impl InstanceData for BasicInstance {

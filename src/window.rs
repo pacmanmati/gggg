@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use winit::{
+    dpi::{LogicalSize, PhysicalSize},
     event_loop::EventLoop,
     window::{Window, WindowBuilder},
 };
@@ -14,12 +15,13 @@ pub trait AppLoop {
 
     fn draw(&mut self);
 
-    fn input(&mut self, input: InputEvent) {}
+    fn input(&mut self, _input: InputEvent) {}
 }
 
 pub struct App {
     title: String,
     frame_rate: f32,
+    size: Option<(u32, u32)>,
 }
 
 impl App {
@@ -32,10 +34,16 @@ impl App {
         self.frame_rate = frame_rate;
         self
     }
+    pub fn with_window_size(mut self, size: (u32, u32)) -> Self {
+        self.size = Some(size);
+        self
+    }
 
     pub fn run<T: AppLoop + 'static>(self, app_loop_init: fn(&Window) -> T) {
+        let size = self.size.unwrap_or((300, 300));
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new()
+            .with_inner_size(LogicalSize::new(size.0, size.1))
             .with_title(self.title)
             .build(&event_loop)
             .unwrap();
@@ -65,19 +73,16 @@ impl App {
                 winit::event::WindowEvent::MouseWheel { .. } => {
                     app_loop.input(InputEvent::mouse_wheel(event))
                 }
-                winit::event::WindowEvent::KeyboardInput {
-                    device_id,
-                    input,
-                    is_synthetic,
-                } => app_loop.input(InputEvent::keyboard_input(event)),
-                _ => {}
-            },
-            winit::event::Event::DeviceEvent { device_id, event } => match event {
-                winit::event::DeviceEvent::MouseMotion { delta } => {
-                    app_loop.input(InputEvent::mouse_motion(event));
+                winit::event::WindowEvent::KeyboardInput { .. } => {
+                    app_loop.input(InputEvent::keyboard_input(event))
                 }
                 _ => {}
             },
+            winit::event::Event::DeviceEvent { event, .. } => {
+                if let winit::event::DeviceEvent::MouseMotion { .. } = event {
+                    app_loop.input(InputEvent::mouse_motion(event));
+                }
+            }
             winit::event::Event::MainEventsCleared => {
                 if now.elapsed().as_secs_f32() >= 1.0 / self.frame_rate {
                     now = Instant::now();
@@ -95,5 +100,6 @@ pub fn make_window() -> App {
     App {
         title: "gggg".into(),
         frame_rate: 60.0,
+        size: None,
     }
 }

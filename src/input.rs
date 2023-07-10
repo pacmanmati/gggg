@@ -12,7 +12,6 @@ impl InputEvent {
             WindowEvent::MouseWheel {
                 device_id: _,
                 delta,
-                phase,
                 ..
             } => {
                 let delta = match delta {
@@ -28,11 +27,7 @@ impl InputEvent {
     }
     pub fn keyboard_input(event: WindowEvent) -> InputEvent {
         match event {
-            WindowEvent::KeyboardInput {
-                device_id,
-                input,
-                is_synthetic,
-            } => InputEvent::KeyboardInput {
+            WindowEvent::KeyboardInput { input, .. } => InputEvent::KeyboardInput {
                 key: input.virtual_keycode.unwrap(),
                 pressed: input.state == ElementState::Pressed,
             },
@@ -51,20 +46,17 @@ impl InputEvent {
     }
     pub fn mouse_button(event: WindowEvent) -> InputEvent {
         match event {
-            WindowEvent::MouseInput {
-                device_id,
-                state,
-                button,
-                ..
-            } => InputEvent::MouseInput(MouseInputEvent::MouseButton {
-                button: match button {
-                    winit::event::MouseButton::Left => MouseButton::MouseLeft,
-                    winit::event::MouseButton::Right => MouseButton::MouseRight,
-                    winit::event::MouseButton::Middle => MouseButton::MouseMiddle,
-                    winit::event::MouseButton::Other(_) => MouseButton::MouseLeft, // todo: handle
-                },
-                pressed: state == ElementState::Pressed,
-            }),
+            WindowEvent::MouseInput { state, button, .. } => {
+                InputEvent::MouseInput(MouseInputEvent::MouseButton {
+                    button: match button {
+                        winit::event::MouseButton::Left => MouseButton::MouseLeft,
+                        winit::event::MouseButton::Right => MouseButton::MouseRight,
+                        winit::event::MouseButton::Middle => MouseButton::MouseMiddle,
+                        winit::event::MouseButton::Other(_) => MouseButton::MouseLeft, // todo: handle
+                    },
+                    pressed: state == ElementState::Pressed,
+                })
+            }
 
             // DeviceEvent::Button { button, state } => {
             //     match button {

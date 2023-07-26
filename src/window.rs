@@ -16,6 +16,8 @@ pub trait AppLoop {
     fn draw(&mut self);
 
     fn input(&mut self, _input: InputEvent) {}
+
+    fn resized(&mut self, new_size: PhysicalSize<u32>) {}
 }
 
 pub struct App {
@@ -57,9 +59,7 @@ impl App {
                 window_id: _,
                 event,
             } => match event {
-                winit::event::WindowEvent::Resized(new_size) => {
-                    println!("resized {:?}", new_size);
-                }
+                winit::event::WindowEvent::Resized(new_size) => app_loop.resized(new_size),
                 winit::event::WindowEvent::CloseRequested => cf.set_exit(),
                 // winit::event::WindowEvent::AxisMotion {
                 //     device_id,

@@ -1,5 +1,7 @@
 use nalgebra::{Isometry3, Matrix4, Orthographic3, Perspective3, Point3, Vector3};
 
+use crate::plain::Plain;
+
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: Matrix4<f32> = Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
@@ -79,4 +81,21 @@ impl Camera {
     pub fn model_view_projection(&self, model: Matrix4<f32>) -> Matrix4<f32> {
         OPENGL_TO_WGPU_MATRIX * self.projection() * (self.view() * model)
     }
+
+    pub fn uniform(&self) -> CameraUniform {
+        CameraUniform {
+            view_proj: self.view_projection().into(),
+            position: self.eye.into(),
+            padding: 0,
+        }
+    }
 }
+
+#[repr(C)]
+pub struct CameraUniform {
+    view_proj: [[f32; 4]; 4],
+    position: [f32; 3],
+    padding: u32,
+}
+
+unsafe impl Plain for CameraUniform {}

@@ -11,7 +11,7 @@ use wgpu::{
     RequestAdapterOptions, Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension,
     TextureFormat, TextureUsages, TextureViewDescriptor,
 };
-use winit::window::Window;
+use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
     atlas::{Atlas, RectHandle},
@@ -449,7 +449,74 @@ impl Render {
             .ok_or(anyhow!("No Bind for handle"))
     }
 
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        self.surface.configure(
+            self.device(),
+            &SurfaceConfiguration {
+                usage: TextureUsages::RENDER_ATTACHMENT,
+                format: *self
+                    .surface
+                    .get_capabilities(&self.adapter)
+                    .formats
+                    .first()
+                    .unwrap(),
+                width: size.width,
+                height: size.height,
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                view_formats: vec![],
+            },
+        );
+
+        self.depth_texture = self.device().create_texture(&TextureDescriptor {
+            label: Some("depth texture"),
+            size: Extent3d {
+                width: size.width,
+                height: size.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+    }
+
     pub fn draw(&mut self) {
+        if let Some((atlas_bind, binding)) = self.atlas_bind {
+            if self.atlas.changed {
+                self.atlas.pack();
+                self.atlas.changed = false;
+                // update the atlas texture
+                let atlas_texture =
+                    Texture::from_atlas(&self.atlas, &self.rect_to_tex, &self.textures);
+                // let _ = image::save_buffer(
+                //     "atlas.png",
+                //     &atlas_texture.data,
+                //     atlas_texture.width,
+                //     atlas_texture.height,
+                //     image::ColorType::Rgba8,
+                // );
+                self.write_texture(
+                    &atlas_texture.data,
+                    ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(4 * atlas_texture.width),
+                        rows_per_image: None,
+                    },
+                    Extent3d {
+                        width: atlas_texture.width,
+                        height: atlas_texture.height,
+                        depth_or_array_layers: 1,
+                    },
+                    atlas_bind,
+                    binding,
+                );
+            }
+        }
+
         let frame = self.surface.get_current_texture().unwrap();
 
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
@@ -539,38 +606,6 @@ impl Render {
         frame.present();
 
         self.render_objects.clear();
-
-        if let Some((atlas_bind, binding)) = self.atlas_bind {
-            if self.atlas.changed {
-                self.atlas.pack();
-                self.atlas.changed = false;
-                // update the atlas texture
-                let atlas_texture =
-                    Texture::from_atlas(&self.atlas, &self.rect_to_tex, &self.textures);
-                // let _ = image::save_buffer(
-                //     "atlas.png",
-                //     &atlas_texture.data,
-                //     atlas_texture.width,
-                //     atlas_texture.height,
-                //     image::ColorType::Rgba8,
-                // );
-                self.write_texture(
-                    &atlas_texture.data,
-                    ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(4 * atlas_texture.width),
-                        rows_per_image: None,
-                    },
-                    Extent3d {
-                        width: atlas_texture.width,
-                        height: atlas_texture.height,
-                        depth_or_array_layers: 1,
-                    },
-                    atlas_bind,
-                    binding,
-                );
-            }
-        }
     }
 }
 

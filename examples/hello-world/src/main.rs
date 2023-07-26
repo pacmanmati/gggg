@@ -242,8 +242,8 @@ impl AppLoop for App {
 
         render.set_atlas(defaults_bind, 1);
 
-        let cobble_tex = Texture::from_path("red.png");
-        let stone_tex = Texture::from_path("green.png");
+        let cobble_tex = Texture::from_path("cobble.png");
+        let stone_tex = Texture::from_path("stone.png");
 
         let cobble_handle = render.add_texture(cobble_tex);
         let stone_handle = render.add_texture(stone_tex);
@@ -423,6 +423,32 @@ impl AppLoop for App {
             },
             _ => {}
         }
+    }
+
+    fn resized(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        self.render.resize(new_size);
+
+        self.camera = Camera::new(
+            point![1.0, 0.0, 5.0],
+            point![0.0, 0.0, 0.0],
+            ProjectionType::Perspective {
+                aspect: new_size.width as f32 / new_size.height as f32,
+                fovy: 70.0,
+                near: 0.1,
+                far: 100.0,
+            },
+        );
+
+        self.move_camera((0.0, 0.0));
+
+        let camera_data = CameraUniform {
+            view_proj: self.camera.view_projection().into(),
+            position: self.camera.eye.into(),
+            padding: 0,
+        };
+
+        self.render
+            .write_buffer(camera_data.as_bytes(), self.defaults_bind, 0);
     }
 }
 

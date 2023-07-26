@@ -1,0 +1,13 @@
+[package]
+name = "draw-2d"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gggg = { path = "../../" }
+image = "0.24.6"
+wgpu = "0.16.1"
+nalgebra = "0.32.2"
+winit = "0.28.6"

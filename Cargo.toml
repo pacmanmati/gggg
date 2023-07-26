@@ -3,8 +3,9 @@ name = "gggg"
 version = "0.1.0"
 edition = "2021"
 
+
 [workspace]
-members = ["examples/hello-world"]
+members = ["examples/hello-world", "examples/draw-2d", "crates/gggg_macros"]
 
 resolver = "2"
 

@@ -22,11 +22,7 @@ pub trait RenderObject {
     type InstanceType: InstanceData;
     type GeometryType: Geometry + 'static;
     type MaterialType: Material + 'static;
-    fn instance(
-        &self,
-        render: &Render,
-        // mesh: Mesh<Self::GeometryType, Self::MaterialType>,
-    ) -> Self::InstanceType;
+    fn instance(&self, render: &Render) -> Self::InstanceType;
     fn pipeline_handle(&self) -> PipelineHandle;
     fn mesh_handle(&self) -> MeshHandle;
     fn boxed(self) -> BoxedRenderObject<Self::GeometryType, Self::InstanceType, Self::MaterialType>

@@ -5,7 +5,13 @@ edition = "2021"
 
 
 [workspace]
-members = ["examples/hello-world", "examples/draw-2d", "crates/gggg_macros"]
+members = [
+    "examples/hello-world",
+    "examples/draw-2d",
+    "crates/gggg_macros",
+    "crates/gggg_ui",
+    "crates/gggg_asset",
+]
 
 resolver = "2"
 

@@ -1,41 +1,44 @@
+use nalgebra::Matrix4;
 use wgpu::{vertex_attr_array, BufferUsages, ShaderStages};
 
 use crate::{
-    bind::{BindEntry, BindEntryType},
+    bind::{BindEntry, BindEntryType, BindHandle},
     camera::CameraUniform,
     geometry::Geometry,
     instance::InstanceData,
     material::BasicMaterial,
-    pipeline::PipelineBuilder,
+    pipeline::{Pipeline, PipelineBuilder, PipelineHandle},
     plain::Plain,
-    render::Render,
+    render::{MeshHandle, Render},
     render_object::RenderObject,
 };
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct ShapeVertex {
     pos: [f32; 3],
 }
 
 unsafe impl Plain for ShapeVertex {}
 
-pub struct ShapeInstance {}
-
 #[repr(C)]
 #[derive(Debug)]
-pub struct ShapeInstanceData {}
+pub struct ShapeInstance {
+    pub transform: Matrix4<f32>,
+    pub albedo: [f32; 4],
+}
 
 unsafe impl Plain for ShapeInstance {}
 
-impl InstanceData for ShapeInstanceData {
+impl InstanceData for ShapeInstance {
     fn data(&self) -> &[u8] {
-        todo!()
+        self.as_bytes()
     }
 }
 
 pub struct ShapeGeometry {
-    pub vertices: Vec<ShapeVertex>,
-    pub indices: Option<Vec<u16>>,
+    pub vertices: [ShapeVertex; 4],
+    pub indices: Option<[u16; 6]>,
 }
 
 impl Geometry for ShapeGeometry {
@@ -52,7 +55,7 @@ impl Geometry for ShapeGeometry {
     }
 }
 
-pub fn pipeline(render: &mut Render) {
+pub fn shape_pipeline(render: &mut Render) -> (Pipeline, BindHandle) {
     let defaults_bind = render.build_bind(&mut [BindEntry {
         visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
         ty: BindEntryType::BufferUniform {
@@ -62,57 +65,85 @@ pub fn pipeline(render: &mut Render) {
         count: None,
     }]);
 
-    PipelineBuilder::new()
+    let pipeline_handle = PipelineBuilder::new()
+        .with_format(wgpu::TextureFormat::Bgra8UnormSrgb)
         .with_cull_mode(Some(wgpu::Face::Back))
         .with_bind(defaults_bind)
-        .with_shader("shapes_shader.wgsl")
+        .with_shader(include_str!("shaders/shapes_shader.wgsl"))
         .with_vb::<ShapeVertex>(
             wgpu::VertexStepMode::Vertex,
-            &vertex_attr_array![0 => Float32x3],
+            &vertex_attr_array![
+                // position
+                0 => Float32x3
+            ],
         )
-        .with_vb::<ShapeInstance>(wgpu::VertexStepMode::Instance, &vertex_attr_array![])
+        .with_vb::<ShapeInstance>(
+            wgpu::VertexStepMode::Instance,
+            &vertex_attr_array![
+                // transform
+                1 => Float32x4,
+                2 => Float32x4,
+                3 => Float32x4,
+                4 => Float32x4,
+                // albedo
+                5 => Float32x4,
+            ],
+        )
         .build(render);
+
+    (pipeline_handle, defaults_bind)
+}
+
+pub const fn quad_geometry() -> ShapeGeometry {
+    ShapeGeometry {
+        vertices: quad_shape(),
+        indices: Some([0, 2, 1, 1, 2, 3]),
+    }
 }
 
 pub const fn quad_shape() -> [ShapeVertex; 4] {
     [
         ShapeVertex {
-            pos: [0.0, 0.0, 0.0],
+            pos: [-0.5, -0.5, 0.0],
         },
         ShapeVertex {
-            pos: [0.0, 0.0, 0.0],
+            pos: [0.5, -0.5, 0.0],
         },
         ShapeVertex {
-            pos: [0.0, 0.0, 0.0],
+            pos: [-0.5, 0.5, 0.0],
         },
         ShapeVertex {
-            pos: [0.0, 0.0, 0.0],
+            pos: [0.5, 0.5, 0.0],
         },
     ]
 }
 
-pub struct ShapeRenderObject {}
+pub struct ShapeRenderObject {
+    pub transform: Matrix4<f32>,
+    pub albedo: [f32; 4],
+    pub pipeline_handle: PipelineHandle,
+    pub mesh_handle: MeshHandle,
+}
 
 impl RenderObject for ShapeRenderObject {
-    type InstanceType = ShapeInstanceData;
+    type InstanceType = ShapeInstance;
 
     type GeometryType = ShapeGeometry;
 
-    type MaterialType = BasicMaterial; // temporary, material doesn't do anything right now
+    type MaterialType = BasicMaterial;
 
-    fn instance(
-        &self,
-        render: &Render,
-        // mesh: Mesh<Self::GeometryType, Self::MaterialType>,
-    ) -> Self::InstanceType {
-        todo!()
+    fn instance(&self, render: &Render) -> Self::InstanceType {
+        ShapeInstance {
+            transform: self.transform,
+            albedo: self.albedo,
+        }
     }
 
     fn pipeline_handle(&self) -> crate::pipeline::PipelineHandle {
-        todo!()
+        self.pipeline_handle
     }
 
     fn mesh_handle(&self) -> crate::render::MeshHandle {
-        todo!()
+        self.mesh_handle
     }
 }

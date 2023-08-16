@@ -552,10 +552,14 @@ impl Render {
                 resolve_target: None,
                 ops: Operations {
                     load: wgpu::LoadOp::Clear(Color {
-                        r: 0.9,
-                        g: 0.7,
-                        b: 0.7,
+                        r: 0.05,
+                        g: 0.05,
+                        b: 0.05,
                         a: 1.0,
+                        // r: 0.9,
+                        // g: 0.7,
+                        // b: 0.7,
+                        // a: 1.0,
                     }),
                     store: true,
                 },
@@ -586,6 +590,7 @@ impl Render {
 
                 rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
                 rpass.set_vertex_buffer(1, instance_buffer.slice(..));
+                // println!("drawing");
                 if let Some(index_buffer) = index_buffer {
                     rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     rpass.draw_indexed(

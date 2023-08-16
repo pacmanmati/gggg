@@ -32,8 +32,6 @@ pub struct Pipeline {
     pub binds: Vec<BindHandle>,
 }
 
-// impl Pipeline {}
-
 pub struct PipelineBuilder {
     // bgs: Vec<Vec<BindEntry>>,
     binds: Vec<BindHandle>,
@@ -49,7 +47,7 @@ impl PipelineBuilder {
             binds: Vec::new(),
             shader_src: None,
             primitive_state: PrimitiveState::default(),
-            format: TextureFormat::Rgba8Unorm,
+            format: TextureFormat::Bgra8UnormSrgb,
             vertex_entries: Vec::new(),
         }
     }

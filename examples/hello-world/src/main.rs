@@ -213,6 +213,7 @@ impl AppLoop for App {
         };
 
         let defaults_bind = render.build_bind(&mut [
+            // camera
             BindEntry {
                 visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                 ty: BindEntryType::BufferUniform {
@@ -222,6 +223,7 @@ impl AppLoop for App {
 
                 count: None,
             },
+            // texture atlas
             BindEntry {
                 visibility: ShaderStages::FRAGMENT,
                 ty: BindEntryType::Texture {

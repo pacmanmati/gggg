@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::plain::Plain;
 
 #[repr(C)]
@@ -10,6 +12,7 @@ pub struct Vertex {
 
 unsafe impl Plain for Vertex {}
 
+#[derive(Debug)]
 pub struct BasicGeometry {
     pub vertices: Vec<Vertex>,
     pub indices: Option<Vec<u16>>,
@@ -29,7 +32,7 @@ impl Geometry for BasicGeometry {
     }
 }
 
-pub trait Geometry {
+pub trait Geometry: Debug {
     fn contents(&self) -> &[u8];
 
     fn length(&self) -> u32;

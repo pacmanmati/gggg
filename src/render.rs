@@ -6,8 +6,8 @@ use generational_arena::{Arena, Index};
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     Adapter, Buffer, BufferDescriptor, BufferUsages, Color, CommandEncoderDescriptor, Device,
-    DeviceDescriptor, Extent3d, ImageCopyTexture, ImageDataLayout, Instance, Operations, Origin3d,
-    Queue, RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    DeviceDescriptor, Extent3d, ImageDataLayout, Instance, Operations, Queue,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RequestAdapterOptions, Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension,
     TextureFormat, TextureUsages, TextureViewDescriptor,
 };
@@ -24,7 +24,7 @@ use crate::{
     texture::Texture,
 };
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 struct MeshAndPipelineHandleComposite(MeshHandle, PipelineHandle);
 
 // renderer draws meshes
@@ -41,9 +41,7 @@ pub struct Render {
         Option<Buffer>, // index
     )>,
     textures: Arena<Texture>,
-    atlas_bind: Option<(BindHandle, u32)>,
-    atlas: Atlas,
-    rect_to_tex: HashMap<RectHandle, TextureHandle>,
+    atlases: Arena<(BindHandle, u32, Atlas, HashMap<RectHandle, TextureHandle>)>,
     instances: HashMap<
         MeshHandle,
         (
@@ -205,9 +203,7 @@ impl Render {
             pipelines: Arena::new(),
             meshes: Arena::new(),
             textures: Arena::new(),
-            atlas_bind: None,
-            atlas: Atlas::new(),
-            rect_to_tex: HashMap::new(),
+            atlases: Arena::new(),
             instances: HashMap::new(),
             render_objects: HashMap::new(),
             depth_texture,
@@ -231,35 +227,51 @@ impl Render {
     }
 
     /// Returns [x, y, x, y] for top left and top right. These values are fractional and represent where this texture is contained on the atlas_texture.
-    pub fn get_atlas_coords_for_texture(&self, texture_handle: TextureHandle) -> [f32; 4] {
-        let tex_to_rect = self
-            .rect_to_tex
+    pub fn get_atlas_coords_for_texture(
+        &self,
+        texture_handle: TextureHandle,
+        atlas_handle: AtlasHandle,
+    ) -> Result<[f32; 4]> {
+        let (_, _, atlas, rect_to_tex) = self
+            .atlases
+            .get(atlas_handle.0)
+            .ok_or(anyhow!("No matching atlas found"))?;
+        let tex_to_rect = rect_to_tex
             .iter()
             .map(|(rect, tex)| (tex, rect))
             .collect::<HashMap<_, _>>();
         let rect_handle = **tex_to_rect.get(&texture_handle).unwrap();
-        let rect = self.atlas.get_rect(rect_handle).unwrap();
-        [
-            rect.x as f32 / self.atlas.width as f32,
-            rect.y as f32 / self.atlas.height as f32,
-            (rect.x as f32 + rect.w as f32) / self.atlas.width as f32,
-            (rect.y as f32 + rect.h as f32) / self.atlas.height as f32,
-        ]
+        let rect = atlas.get_rect(rect_handle).unwrap();
+        println!("rect {:?} , atlas ({} {})", rect, atlas.width, atlas.height);
+        Ok([
+            rect.x as f32 / atlas.width as f32,
+            rect.y as f32 / atlas.height as f32,
+            (rect.x as f32 + rect.w as f32) / atlas.width as f32,
+            (rect.y as f32 + rect.h as f32) / atlas.height as f32,
+        ])
     }
 
-    pub fn get_texture() -> Result<()> {
-        // TODO
-        Ok(())
-    }
+    // pub fn get_texture() -> Result<()> {
+    //     // TODO
+    //     Ok(())
+    // }
 
-    pub fn add_texture(&mut self, texture: Texture) -> TextureHandle {
+    pub fn add_texture(
+        &mut self,
+        texture: Texture,
+        atlas_handle: AtlasHandle,
+    ) -> Result<TextureHandle> {
         // whenever a texture gets added, we want to stitch it into the texture atlas and remember where it goes
         // when we expand the material definition, it'll be able to reference textures via handle
-        let rect_handle = self.atlas.add(texture.width(), texture.height());
+        let (_, _, atlas, rect_to_tex) = self
+            .atlases
+            .get_mut(atlas_handle.0)
+            .ok_or(anyhow!("Atlas not found."))?;
+        let rect_handle = atlas.add(texture.width(), texture.height());
         let texture_handle = TextureHandle(self.textures.insert(texture));
-        self.rect_to_tex.insert(rect_handle, texture_handle);
-        self.atlas.pack();
-        texture_handle
+        rect_to_tex.insert(rect_handle, texture_handle);
+        atlas.pack();
+        Ok(texture_handle)
     }
 
     pub fn get_mesh(
@@ -424,8 +436,11 @@ impl Render {
         &self.queue
     }
 
-    pub fn set_atlas(&mut self, handle: BindHandle, binding: u32) {
-        self.atlas_bind = Some((handle, binding));
+    pub fn register_atlas(&mut self, handle: BindHandle, binding: u32) -> AtlasHandle {
+        let idx = self
+            .atlases
+            .insert((handle, binding, Atlas::new(), HashMap::new()));
+        AtlasHandle(idx)
     }
 
     pub fn build_bind(&mut self, bind_entries: &mut [BindEntry]) -> BindHandle {
@@ -485,20 +500,28 @@ impl Render {
     }
 
     pub fn draw(&mut self) {
-        if let Some((atlas_bind, binding)) = self.atlas_bind {
-            if self.atlas.changed {
-                self.atlas.pack();
-                self.atlas.changed = false;
+        let mut atlases = std::mem::take(&mut self.atlases);
+        atlases
+            .iter_mut()
+            .filter_map(|(handle, (atlas_bind, binding, atlas, rect_to_tex))| {
+                if atlas.changed {
+                    Some((handle, atlas_bind, binding, atlas, rect_to_tex))
+                } else {
+                    None
+                }
+            })
+            .for_each(|(handle, atlas_bind, binding, atlas, rect_to_tex)| {
+                atlas.pack();
+                atlas.changed = false;
                 // update the atlas texture
-                let atlas_texture =
-                    Texture::from_atlas(&self.atlas, &self.rect_to_tex, &self.textures);
-                // let _ = image::save_buffer(
-                //     "atlas.png",
-                //     &atlas_texture.data,
-                //     atlas_texture.width,
-                //     atlas_texture.height,
-                //     image::ColorType::Rgba8,
-                // );
+                let atlas_texture = Texture::from_atlas(atlas, rect_to_tex, &self.textures);
+                let _ = image::save_buffer(
+                    format!("atlas_{:?}.png", handle.into_raw_parts()),
+                    &atlas_texture.data,
+                    atlas_texture.width,
+                    atlas_texture.height,
+                    image::ColorType::Rgba8,
+                );
                 self.write_texture(
                     &atlas_texture.data,
                     ImageDataLayout {
@@ -511,11 +534,12 @@ impl Render {
                         height: atlas_texture.height,
                         depth_or_array_layers: 1,
                     },
-                    atlas_bind,
-                    binding,
+                    *atlas_bind,
+                    *binding,
                 );
-            }
-        }
+            });
+
+        self.atlases = std::mem::take(&mut atlases);
 
         let frame = self.surface.get_current_texture().unwrap();
 
@@ -538,6 +562,8 @@ impl Render {
         let mut draw_map: HashMap<PipelineHandle, HashMap<MeshHandle, (u32, &Buffer)>> =
             HashMap::new();
 
+        // println!("{:?}", &self.render_objects.values());
+
         for (key, (render_objects, buffer)) in &self.render_objects {
             draw_map
                 .entry(key.1)
@@ -556,10 +582,6 @@ impl Render {
                         g: 0.05,
                         b: 0.05,
                         a: 1.0,
-                        // r: 0.9,
-                        // g: 0.7,
-                        // b: 0.7,
-                        // a: 1.0,
                     }),
                     store: true,
                 },
@@ -587,10 +609,8 @@ impl Render {
                 // get the mesh
                 let (mesh, vertex_buffer, index_buffer) =
                     self.get_mesh(*mesh_handle).expect("Mesh should exist");
-
                 rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
                 rpass.set_vertex_buffer(1, instance_buffer.slice(..));
-                // println!("drawing");
                 if let Some(index_buffer) = index_buffer {
                     rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     rpass.draw_indexed(
@@ -614,10 +634,13 @@ impl Render {
     }
 }
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug)]
+pub struct AtlasHandle(pub Index);
+
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug)]
 pub struct MeshHandle(pub Index);
 
-#[derive(Eq, Hash, PartialEq, Clone, Copy)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy, Debug)]
 pub struct TextureHandle(pub Index);
 
 pub struct Mesh<G: Geometry, M: Material> {

@@ -4,4 +4,5 @@
 // - stitch those bitmaps into an atlas
 // - draw textured rects for each letter
 
+pub mod font_bitmap_manager;
 pub mod pipeline;

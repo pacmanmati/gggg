@@ -6,7 +6,7 @@ use gggg::{
     material::BasicMaterial,
     pipeline::{PipelineBuilder, PipelineHandle},
     plain::Plain,
-    render::{Mesh, MeshHandle, Render, TextureHandle},
+    render::{AtlasHandle, Mesh, MeshHandle, Render, TextureHandle},
     render_object::BasicRenderObject,
     texture::Texture,
     window::{make_window, AppLoop},
@@ -48,6 +48,7 @@ fn v(x: f32, y: f32, z: f32, u: f32, v: f32, nx: f32, ny: f32, nz: f32) -> Verte
     }
 }
 
+#[derive(Debug)]
 struct Cube {
     vertices: Vec<Vertex>,
 }
@@ -157,6 +158,7 @@ struct App {
     cube_handle: MeshHandle,
     cobble_handle: TextureHandle,
     stone_handle: TextureHandle,
+    atlas_handle: AtlasHandle,
 }
 
 impl App {
@@ -242,13 +244,13 @@ impl AppLoop for App {
             },
         ]);
 
-        render.set_atlas(defaults_bind, 1);
+        let atlas_handle = render.register_atlas(defaults_bind, 1);
 
         let cobble_tex = Texture::from_path("cobble.png");
         let stone_tex = Texture::from_path("stone.png");
 
-        let cobble_handle = render.add_texture(cobble_tex);
-        let stone_handle = render.add_texture(stone_tex);
+        let cobble_handle = render.add_texture(cobble_tex, atlas_handle).unwrap();
+        let stone_handle = render.add_texture(stone_tex, atlas_handle).unwrap();
 
         let sampler_bind_handle = render.build_bind(&mut [BindEntry {
             visibility: ShaderStages::FRAGMENT,
@@ -384,6 +386,7 @@ impl AppLoop for App {
             cube_handle,
             cobble_handle,
             stone_handle,
+            atlas_handle,
         }
     }
 
@@ -393,6 +396,7 @@ impl AppLoop for App {
             mesh_handle: self.cube_handle,
             transform: Translation3::new(0.0, 0.0, 0.0).to_homogeneous(),
             texture_handle: self.cobble_handle,
+            atlas_handle: self.atlas_handle,
         });
 
         self.render.add_render_object(BasicRenderObject {
@@ -400,6 +404,7 @@ impl AppLoop for App {
             mesh_handle: self.cube_handle,
             transform: Translation3::new(1.0, 0.0, 0.0).to_homogeneous(),
             texture_handle: self.stone_handle,
+            atlas_handle: self.atlas_handle,
         });
 
         self.render.draw();
@@ -415,7 +420,7 @@ impl AppLoop for App {
                     self.zoom_camera((0.0, -10.0));
                 } else if key == VirtualKeyCode::T && pressed {
                     let texture = Texture::from_path("red.png");
-                    self.render.add_texture(texture);
+                    self.render.add_texture(texture, self.atlas_handle);
                 }
             }
             gggg::input::InputEvent::MouseInput(input) => match input {

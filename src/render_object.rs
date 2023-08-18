@@ -5,7 +5,7 @@ use crate::{
     instance::{BasicInstance, InstanceData},
     material::{BasicMaterial, Material},
     pipeline::PipelineHandle,
-    render::{MeshHandle, Render, TextureHandle},
+    render::{AtlasHandle, MeshHandle, Render, TextureHandle},
 };
 
 // A RenderObject defines how instance data is obtained from the renderer, mesh and material data for a particular pipeline.
@@ -18,7 +18,7 @@ use crate::{
 // this feels overly complex but i think it gives us the flexibility we need to define our own materials in code.
 //
 // what does a renderobject give us that a mesh doesn't? - mesh is a struct not a trait i guess
-pub trait RenderObject {
+pub trait RenderObject: std::fmt::Debug {
     type InstanceType: InstanceData;
     type GeometryType: Geometry + 'static;
     type MaterialType: Material + 'static;
@@ -41,6 +41,7 @@ pub trait RenderObject {
 // we can honestly store some of the data. eg. pipelinehandle, meshhandle. instance() is the only real problem.
 // can we store it as any? and downcast it? or can it be generic instead? - if it's a generic the boxedrenderobject requires generics too. is that a problem?
 // generics work!
+#[derive(Debug)]
 pub struct BoxedRenderObject<G, I, M>(
     Box<dyn RenderObject<GeometryType = G, InstanceType = I, MaterialType = M>>,
 );
@@ -81,6 +82,7 @@ impl<G: Geometry + 'static, I: InstanceData + 'static, M: Material + 'static> Re
     }
 }
 
+#[derive(Debug)]
 pub struct BasicRenderObject {
     // TODO: maybe move pipeline handle into material?
     pub pipeline_handle: PipelineHandle,
@@ -88,6 +90,7 @@ pub struct BasicRenderObject {
     pub transform: Matrix4<f32>,
     // TODO: move texture into material. replace with material_handle
     pub texture_handle: TextureHandle,
+    pub atlas_handle: AtlasHandle,
 }
 
 impl RenderObject for BasicRenderObject {
@@ -98,7 +101,9 @@ impl RenderObject for BasicRenderObject {
     type MaterialType = BasicMaterial;
 
     fn instance(&self, render: &Render) -> Self::InstanceType {
-        let atlas_coords = render.get_atlas_coords_for_texture(self.texture_handle);
+        let atlas_coords = render
+            .get_atlas_coords_for_texture(self.texture_handle, self.atlas_handle)
+            .unwrap();
         // println!("{:?}", atlas_coords);
         BasicInstance {
             transform: self.transform,

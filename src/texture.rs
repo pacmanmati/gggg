@@ -38,7 +38,7 @@ impl Texture {
         textures: &Arena<Texture>,
     ) -> Self {
         // each component (r,g,b,a) is represented with one byte so each pixel is 4 bytes
-        let mut data: Vec<u8> = repeat(255)
+        let mut data: Vec<u8> = repeat(0)
             .take((atlas.width * atlas.height * 4).try_into().unwrap())
             .collect();
         for (rect_handle, texture_handle) in rect_to_tex {

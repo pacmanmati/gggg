@@ -38,10 +38,14 @@ impl Atlas {
 
     pub fn pack(&mut self) {
         self.changed = true;
-        // let's go for a fixed width to break on
         let mut x = 0;
         let mut y = 0;
-        self.width = 512;
+        // self.width = 512;
+        let total_area = self
+            .rects
+            .iter()
+            .fold(0.0, |acc, (_, rect)| (rect.w * rect.h) as f32 + acc);
+        self.width = total_area.sqrt().round() as u32;
         // sort s.t. the tallest rect is first
         // decreasing rect height means we can pack everything in a row
         let sorted_rects = self

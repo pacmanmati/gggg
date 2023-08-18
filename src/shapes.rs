@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[repr(C)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ShapeVertex {
     pos: [f32; 3],
 }
@@ -36,6 +36,7 @@ impl InstanceData for ShapeInstance {
     }
 }
 
+#[derive(Debug)]
 pub struct ShapeGeometry {
     pub vertices: [ShapeVertex; 4],
     pub indices: Option<[u16; 6]>,
@@ -69,7 +70,7 @@ pub fn shape_pipeline(render: &mut Render) -> (Pipeline, BindHandle) {
         .with_format(wgpu::TextureFormat::Bgra8UnormSrgb)
         .with_cull_mode(Some(wgpu::Face::Back))
         .with_bind(defaults_bind)
-        .with_shader(include_str!("shaders/shapes_shader.wgsl"))
+        .with_shader(include_str!("shaders/shapes.wgsl"))
         .with_vb::<ShapeVertex>(
             wgpu::VertexStepMode::Vertex,
             &vertex_attr_array![
@@ -118,6 +119,7 @@ pub const fn quad_shape() -> [ShapeVertex; 4] {
     ]
 }
 
+#[derive(Debug)]
 pub struct ShapeRenderObject {
     pub transform: Matrix4<f32>,
     pub albedo: [f32; 4],

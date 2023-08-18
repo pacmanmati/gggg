@@ -81,7 +81,7 @@ impl AppLoop for App {
 
         let font_atlas_handle = render.register_atlas(text_bind, 1);
         let roboto_manager =
-            FontBitmapManager::new(&mut render, "Roboto.ttf", 250.0, font_atlas_handle).unwrap();
+            FontBitmapManager::new(&mut render, "Roboto.ttf", 60.0, font_atlas_handle).unwrap();
 
         App {
             render,
@@ -115,7 +115,7 @@ impl AppLoop for App {
         //     mesh_handle: self.mesh_handle,
         // });
 
-        let metric = self.roboto_manager.get_metric('a').unwrap();
+        let metric = self.roboto_manager.get_metric('A').unwrap();
         let glyph_aspect_ratio = metric.width as f32 / metric.height as f32;
         // println!("{}", glyph_aspect_ratio);
 
@@ -126,7 +126,7 @@ impl AppLoop for App {
             albedo: [1.0, 0.0, 0.0, 1.0],
             pipeline_handle: self.text_pipeline_handle,
             mesh_handle: self.text_mesh_handle,
-            character: 'a',
+            character: 'A',
             manager: self.roboto_manager.clone(),
         });
         self.render.draw();

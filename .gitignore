@@ -1,1 +1,3 @@
+# ignore images by default, maybe add exclusion for `assets/` later
+*.png
 /target

@@ -35,20 +35,19 @@ impl FontBitmapManager {
         let _ = reader.read_to_end(&mut buf)?;
         let font = Font::from_bytes(buf, FontSettings::default()).map_err(|err| anyhow!(err))?;
 
-        let map = 
-        // font
-            // .chars()
-        [
-            'a', 
-            'b',
-            'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 
-            'V', 
-            'W', 'X', 'Y', 'Z',
-        ]
+        let map = font
+            .chars()
+            // [
+            //     'a',
+            //     'b',
+            //     'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+            //     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U',
+            //     'V',
+            //     'W', 'X', 'Y', 'Z',
+            // ]
             .iter()
-            // .map(|(c, _)| {
-            .map(|c| {
+            .map(|(c, _)| {
+                // .map(|c| {
                 let (metrics, mut bitmap) = font.rasterize(*c, px);
                 // for now, we wastefully convert bitmap from an r8unorm (grayscale) format to an rgba8unorm format (e.g. insert 3 copies of each value)
                 bitmap = bitmap.iter().fold(vec![], |mut acc, val| {
@@ -72,13 +71,13 @@ impl FontBitmapManager {
 
     pub fn get_metric(&self, character: char) -> Result<Metrics> {
         self.map
-        .get(&character)
-        .ok_or(anyhow!(
-            "Couldn't find metric for character '{}'",
-            character
-        ))
-        .copied()
-        .map(|inner| inner.1)
+            .get(&character)
+            .ok_or(anyhow!(
+                "Couldn't find metric for character '{}'",
+                character
+            ))
+            .copied()
+            .map(|inner| inner.1)
     }
 
     pub fn get_texture(&self, character: char) -> Result<TextureHandle> {

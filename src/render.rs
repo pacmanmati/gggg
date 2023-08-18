@@ -242,7 +242,6 @@ impl Render {
             .collect::<HashMap<_, _>>();
         let rect_handle = **tex_to_rect.get(&texture_handle).unwrap();
         let rect = atlas.get_rect(rect_handle).unwrap();
-        println!("rect {:?} , atlas ({} {})", rect, atlas.width, atlas.height);
         Ok([
             rect.x as f32 / atlas.width as f32,
             rect.y as f32 / atlas.height as f32,

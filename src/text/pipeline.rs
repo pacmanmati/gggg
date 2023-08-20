@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use nalgebra::{Matrix4, Vector4};
 use wgpu::{vertex_attr_array, BufferUsages, Extent3d, ShaderStages, TextureUsages};
 
@@ -95,7 +97,7 @@ pub struct TextRenderObject {
     pub pipeline_handle: PipelineHandle,
     pub mesh_handle: MeshHandle,
     pub character: char,
-    pub manager: FontBitmapManager, // TODO: convert this to a reference or an Rc, we don't want to make copies each frame
+    pub manager: Rc<FontBitmapManager>,
 }
 
 impl RenderObject for TextRenderObject {
@@ -114,7 +116,6 @@ impl RenderObject for TextRenderObject {
         let atlas_coords = render
             .get_atlas_coords_for_texture(texture_handle, self.manager.atlas_handle)
             .unwrap();
-        println!("{:?}", atlas_coords);
         TextInstance {
             transform: self.transform,
             albedo: self.albedo,

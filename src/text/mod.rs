@@ -6,3 +6,4 @@
 
 pub mod font_bitmap_manager;
 pub mod pipeline;
+pub mod text_builder;

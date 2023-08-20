@@ -47,15 +47,15 @@ impl Texture {
             let offset: usize = (4 * (rect.x + rect.y * atlas.width)).try_into().unwrap();
             // println!("offset: {}, offset / 4: {}", offset, offset / 4);
             let texture = textures.get(texture_handle.0).unwrap();
+            let tex_width = texture.width as usize;
             // we cannot naively paste the texture data into a 1d array
             // we need to do it row by row
             // we'll always be at the same x offset but our y offset can change
             // and we need to iterate over the texture's rows
             for row in 0..texture.height as usize {
-                let tex_width = texture.width as usize;
                 let row_data = texture
                     .data
-                    .get(row * tex_width * 4..((row + 1) * tex_width * 4))
+                    .get((row * tex_width * 4)..((row + 1) * tex_width * 4))
                     .unwrap()
                     .to_vec();
                 let row_offset = row * atlas.width as usize * 4 + offset;

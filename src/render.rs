@@ -512,6 +512,7 @@ impl Render {
             .for_each(|(handle, atlas_bind, binding, atlas, rect_to_tex)| {
                 atlas.pack();
                 atlas.changed = false;
+
                 // update the atlas texture
                 let atlas_texture = Texture::from_atlas(atlas, rect_to_tex, &self.textures);
                 let _ = image::save_buffer(

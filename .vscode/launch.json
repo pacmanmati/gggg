@@ -1,0 +1,139 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'hello-world'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=hello-world",
+                    "--package=hello-world"
+                ],
+                "filter": {
+                    "name": "hello-world",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'hello-world'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=hello-world",
+                    "--package=hello-world"
+                ],
+                "filter": {
+                    "name": "hello-world",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'gggg'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=gggg"
+                ],
+                "filter": {
+                    "name": "gggg",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'draw-2d'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=draw-2d",
+                    "--package=draw-2d"
+                ],
+                "filter": {
+                    "name": "draw-2d",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}/examples/draw-2d"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'draw-2d'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=draw-2d",
+                    "--package=draw-2d"
+                ],
+                "filter": {
+                    "name": "draw-2d",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'gggg_ui'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=gggg_ui"
+                ],
+                "filter": {
+                    "name": "gggg_ui",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'gggg_asset'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=gggg_asset"
+                ],
+                "filter": {
+                    "name": "gggg_asset",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

@@ -43,16 +43,6 @@ fn vertex(vertex: VertexInput, instance: InstanceInput) -> VertexOutput {
     var out: VertexOutput;
     out.clip_position = camera.view_projection * model_matrix * vec4<f32>(vertex.position, 1.0);
     out.uv = vertex.uv;
-    // if vertex.uv.x < 0.5 {
-    //     out.uv.x = instance.atlas_coords.x;
-    // } else {
-    //     out.uv.x = instance.atlas_coords.z;
-    // }
-    // if vertex.uv.y < 0.5 {
-    //     out.uv.y = instance.atlas_coords.y;
-    // } else {
-    //     out.uv.y = instance.atlas_coords.w;
-    // }
     out.color = instance.albedo;
     out.atlas_coords = instance.atlas_coords;
     return out;
@@ -63,13 +53,9 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv_start = in.atlas_coords.xy;
     let uv_end = in.atlas_coords.zw;
     var scale = uv_end - uv_start;
-    // var scale = distance(uv_end, uv_start);
-    // let scaled_uv = in.uv;
     let scaled_uv = scale * in.uv + uv_start;
 
 
     let sampled = textureSample(atlas_texture, samp, scaled_uv);
-    // return vec4<f32>(1.0, 0.0, 0.0, 1.0);
-    // return sampled;
     return vec4<f32>(in.color.rgb, sampled.a);
 }

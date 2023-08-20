@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use gggg::{
     bind::BindHandle,
     camera::{Camera, ProjectionType},
@@ -12,6 +14,7 @@ use gggg::{
             quad_geometry as text_quad_geometry, text_pipeline, TextGeometry, TextInstance,
             TextRenderObject,
         },
+        text_builder::TextBuilder,
     },
     window::{make_window, AppLoop},
 };
@@ -26,7 +29,7 @@ struct App {
     text_pipeline_handle: PipelineHandle,
     text_bind: BindHandle,
     text_mesh_handle: MeshHandle,
-    roboto_manager: FontBitmapManager,
+    roboto_manager: Rc<FontBitmapManager>,
 }
 
 impl AppLoop for App {
@@ -46,10 +49,10 @@ impl AppLoop for App {
             point![0.0, 0.0, 100.0],
             point![0.0, 0.0, 0.0],
             ProjectionType::Orthographic {
-                left: -20.0,
-                right: 20.0,
-                top: 20.0,
-                bottom: -20.0,
+                left: -100.0,
+                right: 100.0,
+                top: 100.0,
+                bottom: -100.0,
                 near: -200.0,
                 far: 200.0,
             },
@@ -80,8 +83,9 @@ impl AppLoop for App {
         render.write_buffer(camera_bytes, text_bind, 0);
 
         let font_atlas_handle = render.register_atlas(text_bind, 1);
-        let roboto_manager =
-            FontBitmapManager::new(&mut render, "Roboto.ttf", 60.0, font_atlas_handle).unwrap();
+        let roboto_manager = Rc::new(
+            FontBitmapManager::new(&mut render, "Roboto.ttf", 100.0, font_atlas_handle).unwrap(),
+        );
 
         App {
             render,
@@ -119,16 +123,30 @@ impl AppLoop for App {
         let glyph_aspect_ratio = metric.width as f32 / metric.height as f32;
         // println!("{}", glyph_aspect_ratio);
 
-        self.render.add_render_object(TextRenderObject {
-            transform: Translation3::new(0.0, 0.0, 0.0).to_homogeneous()
-                * Scale3::new(10.0 * glyph_aspect_ratio, 10.0 / glyph_aspect_ratio, 1.0)
-                    .to_homogeneous(),
-            albedo: [1.0, 0.0, 0.0, 1.0],
-            pipeline_handle: self.text_pipeline_handle,
-            mesh_handle: self.text_mesh_handle,
-            character: 'A',
-            manager: self.roboto_manager.clone(),
-        });
+        // self.render.add_render_object(TextRenderObject {
+        //     transform: Translation3::new(0.0, 0.0, 0.0).to_homogeneous()
+        //         * Scale3::new(1.0 * glyph_aspect_ratio, 1.0 / glyph_aspect_ratio, 1.0)
+        //             .to_homogeneous(),
+        //     albedo: [1.0, 0.0, 0.0, 1.0],
+        //     pipeline_handle: self.text_pipeline_handle,
+        //     mesh_handle: self.text_mesh_handle,
+        //     character: 'A',
+        //     manager: self.roboto_manager.clone(),
+        // });
+
+        TextBuilder::new(
+            "he",
+            [1.0, 0.0, 0.0, 1.0],
+            Translation3::new(0.0, 0.0, 0.0).to_homogeneous(),
+            self.roboto_manager.clone(),
+            self.text_pipeline_handle,
+            self.text_mesh_handle,
+        )
+        .build()
+        .unwrap()
+        .into_iter()
+        .for_each(|obj| self.render.add_render_object(obj));
+
         self.render.draw();
     }
 
@@ -139,10 +157,10 @@ impl AppLoop for App {
             point![0.0, 0.0, 100.0],
             point![0.0, 0.0, 0.0],
             ProjectionType::Orthographic {
-                left: -20.0,
-                right: 20.0,
-                top: 20.0,
-                bottom: -20.0,
+                left: -100.0,
+                right: 100.0,
+                top: 100.0,
+                bottom: -100.0,
                 near: -200.0,
                 far: 200.0,
             },

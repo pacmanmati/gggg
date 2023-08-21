@@ -3,7 +3,12 @@ use std::{borrow::BorrowMut, rc::Rc};
 use anyhow::Result;
 use nalgebra::{Matrix4, Scale3, Translation3};
 
-use crate::{pipeline::PipelineHandle, render::MeshHandle};
+use crate::{
+    material::BasicMaterial,
+    pipeline::PipelineHandle,
+    render::{Mesh, MeshHandle, Render},
+    text::pipeline::{TextGeometry, TextInstance, TextVertex},
+};
 
 use super::{font_bitmap_manager::FontBitmapManager, pipeline::TextRenderObject};
 
@@ -14,6 +19,7 @@ pub struct TextBuilder {
     transform: Matrix4<f32>,
     pipeline_handle: PipelineHandle,
     mesh_handle: MeshHandle,
+    scale: f32,
 }
 
 impl TextBuilder {
@@ -24,6 +30,7 @@ impl TextBuilder {
         font_manager: Rc<FontBitmapManager>,
         pipeline_handle: PipelineHandle,
         mesh_handle: MeshHandle,
+        scale: f32,
     ) -> Self {
         Self {
             text: text.to_string(),
@@ -32,22 +39,31 @@ impl TextBuilder {
             transform,
             pipeline_handle,
             mesh_handle,
+            scale,
         }
     }
 
-    pub fn build(&self) -> Result<Vec<TextRenderObject>> {
+    pub fn build(&self, render: &mut Render) -> Result<Vec<TextRenderObject>> {
         let mut render_objs = Vec::new();
-        let mut current_transform = Matrix4::identity();
+        let mut x = 0.0;
+        let mut y = 0.0;
+
+        let scale = self.scale;
 
         for character in self.text.chars() {
             let metrics = self.font_manager.get_metric(character)?;
-            let glyph_aspect_ratio = metrics.width as f32 / metrics.height as f32;
 
-            let transform = self.transform * current_transform;
-            // * Scale3::new(1.0 * glyph_aspect_ratio, 1.0 / glyph_aspect_ratio, 1.0)
-            //     .to_homogeneous();
+            let xpos = x + metrics.xmin as f32 * scale;
+            let ypos = y + metrics.ymin as f32 * scale;
+            let w = metrics.width as f32 * scale;
+            let h = metrics.height as f32 * scale;
+
+            let transform = self.transform
+                * Translation3::new(xpos, ypos, 0.0).to_homogeneous()
+                * Scale3::new(w, h, 1.0).to_homogeneous();
+
             let render_obj = TextRenderObject {
-                transform,
+                transform: transform,
                 albedo: self.albedo,
                 pipeline_handle: self.pipeline_handle,
                 mesh_handle: self.mesh_handle,
@@ -56,10 +72,8 @@ impl TextBuilder {
             };
 
             render_objs.push(render_obj);
-            println!("{}", metrics.advance_width);
 
-            current_transform = current_transform
-                * Translation3::new(metrics.advance_width, 0.0, 0.0).to_homogeneous();
+            x += metrics.advance_width * scale;
         }
         Ok(render_objs)
     }

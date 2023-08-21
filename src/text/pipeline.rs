@@ -20,8 +20,8 @@ use super::font_bitmap_manager::FontBitmapManager;
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct TextVertex {
-    pos: [f32; 3],
-    uv: [f32; 2],
+    pub pos: [f32; 3],
+    pub uv: [f32; 2],
 }
 
 unsafe impl Plain for TextVertex {}
@@ -72,19 +72,19 @@ pub const fn quad_geometry() -> TextGeometry {
 pub const fn quad_shape() -> [TextVertex; 4] {
     [
         TextVertex {
-            pos: [-0.5, -0.5, 0.0],
+            pos: [0.0, 0.0, 0.0],
             uv: [0.0, 1.0],
         },
         TextVertex {
-            pos: [0.5, -0.5, 0.0],
+            pos: [1.0, 0.0, 0.0],
             uv: [1.0, 1.0],
         },
         TextVertex {
-            pos: [-0.5, 0.5, 0.0],
+            pos: [0.0, 1.0, 0.0],
             uv: [0.0, 0.0],
         },
         TextVertex {
-            pos: [0.5, 0.5, 0.0],
+            pos: [1.0, 1.0, 0.0],
             uv: [1.0, 0.0],
         },
     ]

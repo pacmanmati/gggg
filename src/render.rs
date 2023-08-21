@@ -46,7 +46,7 @@ pub struct Render {
         MeshHandle,
         (
             Vec<Box<dyn InstanceData>>,
-            Buffer, // instance
+            Buffer, // instance - do we need this? it seems not. although, how do we know what instances a mesh has? meshandpipelinehandlecomposite requires a pipeline. which buffer do we want to use?!
         ),
     >,
     // we're in giga type hell now
@@ -394,7 +394,8 @@ impl Render {
             e.insert((vec![Box::new(render_object.boxed())], new_buffer));
         } else {
             let (instances, buffer) = self.render_objects.get_mut(&key).unwrap();
-            if buffer.size() < std::mem::size_of::<R::InstanceType>() as u64 {
+            if buffer.size() < (std::mem::size_of::<R::InstanceType>() * instances.len() + 1) as u64
+            {
                 // create a bigger buffer
                 let new_buffer = self
                     .device
@@ -402,28 +403,28 @@ impl Render {
                     .unwrap()
                     .create_buffer(&BufferDescriptor {
                         label: Some("Instance buffer"),
-                        size: buffer.size() + std::mem::size_of::<R::InstanceType>() as u64 * 10,
+                        // size: buffer.size() + std::mem::size_of::<R::InstanceType>() as u64, // we could reserve more space than necessary here if it improves performance (at the cost of some wasted memory)
+                        size: ((instances.len() + 1) * std::mem::size_of::<R::InstanceType>())
+                            as u64,
                         usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
                         mapped_at_creation: false,
                     });
                 instances.push(Box::new(render_object.boxed()));
-                let (instances, buffer) = self.render_objects.get(&key).unwrap();
+                let (instances, _) = self.render_objects.get(&key).unwrap();
                 let new_data = instances.iter().fold(Vec::new(), |mut acc, instance| {
                     acc.extend_from_slice(instance.instance(self).data());
                     acc
                 });
                 self.queue.write_buffer(&new_buffer, 0, new_data.as_slice());
-                self.instances.entry(mesh_handle).and_modify(|(_, buffer)| {
-                    let _ = std::mem::replace(buffer, new_buffer);
-                });
-
-                return;
+                let (_, buffer) = self.render_objects.get_mut(&key).unwrap();
+                let _ = std::mem::replace(buffer, new_buffer);
+            } else {
+                let offset = instances.len() * std::mem::size_of::<R::InstanceType>();
+                // write this instance into the buffer, no need to resize
+                self.queue
+                    .write_buffer(buffer, offset as u64, instance.data());
+                instances.push(Box::new(render_object.boxed()));
             }
-            let offset = instances.len() * std::mem::size_of::<R::InstanceType>();
-            // write this instance into the buffer, no need to resize
-            self.queue
-                .write_buffer(buffer, offset as u64, instance.data());
-            instances.push(Box::new(render_object.boxed()));
         }
     }
 
@@ -562,8 +563,6 @@ impl Render {
         let mut draw_map: HashMap<PipelineHandle, HashMap<MeshHandle, (u32, &Buffer)>> =
             HashMap::new();
 
-        // println!("{:?}", &self.render_objects.values());
-
         for (key, (render_objects, buffer)) in &self.render_objects {
             draw_map
                 .entry(key.1)
@@ -616,6 +615,8 @@ impl Render {
                     rpass.draw_indexed(
                         0..(index_buffer.size() as u32 / std::mem::size_of::<u16>() as u32),
                         0,
+                        // 0..(instance_buffer.size() as u32
+                        //     / std::mem::size_of::<TextInstance>() as u32),
                         0..*num_instances,
                     )
                 } else {

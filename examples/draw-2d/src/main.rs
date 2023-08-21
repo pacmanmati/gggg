@@ -49,10 +49,10 @@ impl AppLoop for App {
             point![0.0, 0.0, 100.0],
             point![0.0, 0.0, 0.0],
             ProjectionType::Orthographic {
-                left: -100.0,
+                left: 0.0,
                 right: 100.0,
                 top: 100.0,
-                bottom: -100.0,
+                bottom: 0.0,
                 near: -200.0,
                 far: 200.0,
             },
@@ -120,8 +120,6 @@ impl AppLoop for App {
         // });
 
         let metric = self.roboto_manager.get_metric('A').unwrap();
-        let glyph_aspect_ratio = metric.width as f32 / metric.height as f32;
-        // println!("{}", glyph_aspect_ratio);
 
         // self.render.add_render_object(TextRenderObject {
         //     transform: Translation3::new(0.0, 0.0, 0.0).to_homogeneous()
@@ -135,14 +133,17 @@ impl AppLoop for App {
         // });
 
         TextBuilder::new(
-            "he",
-            [1.0, 0.0, 0.0, 1.0],
-            Translation3::new(0.0, 0.0, 0.0).to_homogeneous(),
+            "hello world",
+            [1.0, 1.0, 1.0, 1.0],
+            // Translation3::new(-100.0, 0.0, 0.0).to_homogeneous()
+            Translation3::new(50.0, 50.0, 0.0).to_homogeneous()
+                * Scale3::new(1.0, 1.0, 1.0).to_homogeneous(),
             self.roboto_manager.clone(),
             self.text_pipeline_handle,
             self.text_mesh_handle,
+            0.05,
         )
-        .build()
+        .build(&mut self.render)
         .unwrap()
         .into_iter()
         .for_each(|obj| self.render.add_render_object(obj));
@@ -157,10 +158,10 @@ impl AppLoop for App {
             point![0.0, 0.0, 100.0],
             point![0.0, 0.0, 0.0],
             ProjectionType::Orthographic {
-                left: -100.0,
+                left: 0.0,
                 right: 100.0,
                 top: 100.0,
-                bottom: -100.0,
+                bottom: 0.0,
                 near: -200.0,
                 far: 200.0,
             },

@@ -3,6 +3,8 @@ use std::hash::Hash;
 use generational_arena::{Arena, Index};
 use itertools::Itertools;
 
+use crate::texture::TextureFormat;
+
 #[derive(Eq, Hash, PartialEq, Clone, Copy)]
 pub struct RectHandle(pub Index);
 
@@ -12,15 +14,17 @@ pub struct Atlas {
     pub width: u32,
     pub height: u32,
     pub changed: bool,
+    pub format: TextureFormat,
 }
 
 impl Atlas {
-    pub fn new() -> Self {
+    pub fn new(format: TextureFormat) -> Self {
         Self {
             rects: Arena::new(),
             width: 0,
             height: 0,
             changed: false,
+            format,
         }
     }
 
@@ -70,12 +74,6 @@ impl Atlas {
 
     pub fn get_rect(&self, handle: RectHandle) -> Option<&Rect> {
         self.rects.get(handle.0)
-    }
-}
-
-impl Default for Atlas {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

@@ -37,35 +37,21 @@ impl FontBitmapManager {
 
         let map = font
             .chars()
-            // [
-            //     'a',
-            //     'b',
-            //     'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-            //     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U',
-            //     'V',
-            //     'W', 'X', 'Y', 'Z',
-            // ]
             .iter()
             .map(|(c, _)| {
-                // .map(|c| {
                 let (metrics, mut bitmap) = font.rasterize(*c, px);
-                // for now, we wastefully convert bitmap from an r8unorm (grayscale) format to an rgba8unorm format (e.g. insert 3 copies of each value)
-                // let random = rand::random::<u8>();
-                // let v = (*c as u32).try_into().unwrap_or_else(|_| random);
-                bitmap = bitmap.iter().fold(vec![], |mut acc, val| {
-                    // acc.extend_from_slice(&[v, v, v, 255]);
-                    acc.extend_from_slice(&[255, 255, 255, *val]);
-                    acc
-                });
+                // bitmap = bitmap.iter().fold(vec![], |mut acc, val| {
+                //     // acc.extend_from_slice(&[v, v, v, 255]);
+                //     acc.extend_from_slice(&[255, 255, 255, *val]);
+                //     acc
+                // });
 
-                assert!(bitmap.len() == metrics.width * metrics.height * 4);
+                // assert!(bitmap.len() == metrics.width * metrics.height * 4);
                 let texture = Texture {
                     data: bitmap,
-                    // data: std::iter::repeat(255)
-                    //     .take(bitmap.len().try_into().unwrap())
-                    //     .collect(),
                     width: metrics.width as u32,
                     height: metrics.height as u32,
+                    format: crate::texture::TextureFormat::R8Unorm,
                 };
                 let texture_handle = render.add_texture(texture, atlas_handle)?;
                 anyhow::Ok((*c, (texture_handle, metrics)))

@@ -7,10 +7,26 @@ use crate::{
     render::TextureHandle,
 };
 
+#[derive(Debug, Clone, Copy)]
+pub enum TextureFormat {
+    Rgba8Unorm,
+    R8Unorm,
+}
+
+impl TextureFormat {
+    pub fn pixel_size(&self) -> u32 {
+        match self {
+            TextureFormat::Rgba8Unorm => 4,
+            TextureFormat::R8Unorm => 1,
+        }
+    }
+}
+
 pub struct Texture {
     pub data: Vec<u8>,
     pub width: u32,
     pub height: u32,
+    pub format: TextureFormat,
 }
 
 impl Texture {
@@ -29,6 +45,7 @@ impl Texture {
             width: buff.width(),
             height: buff.height(),
             data: buff.to_vec(),
+            format: TextureFormat::Rgba8Unorm,
         }
     }
 
@@ -37,17 +54,22 @@ impl Texture {
         rect_to_tex: &HashMap<RectHandle, TextureHandle>,
         textures: &Arena<Texture>,
     ) -> Self {
-        // each component (r,g,b,a) is represented with one byte so each pixel is 4 bytes
+        let pixel_size = atlas.format.pixel_size();
         let mut data: Vec<u8> = repeat(0)
-            .take((atlas.width * atlas.height * 4).try_into().unwrap())
+            .take(
+                (atlas.width * atlas.height * pixel_size)
+                    .try_into()
+                    .unwrap(),
+            )
             .collect();
         for (rect_handle, texture_handle) in rect_to_tex {
             let rect = atlas.get_rect(*rect_handle).unwrap();
-            // println!("{:?}", &rect);
-            let offset: usize = (4 * (rect.x + rect.y * atlas.width)).try_into().unwrap();
-            // println!("offset: {}, offset / 4: {}", offset, offset / 4);
+            let offset: usize = (pixel_size * (rect.x + rect.y * atlas.width))
+                .try_into()
+                .unwrap();
             let texture = textures.get(texture_handle.0).unwrap();
             let tex_width = texture.width as usize;
+
             // we cannot naively paste the texture data into a 1d array
             // we need to do it row by row
             // we'll always be at the same x offset but our y offset can change
@@ -55,10 +77,13 @@ impl Texture {
             for row in 0..texture.height as usize {
                 let row_data = texture
                     .data
-                    .get((row * tex_width * 4)..((row + 1) * tex_width * 4))
+                    .get(
+                        (row * tex_width * pixel_size as usize)
+                            ..((row + 1) * tex_width * pixel_size as usize),
+                    )
                     .unwrap()
                     .to_vec();
-                let row_offset = row * atlas.width as usize * 4 + offset;
+                let row_offset = row * atlas.width as usize * pixel_size as usize + offset;
                 // println!("{:?}", row_offset..row_offset + row_data.len());
                 data.splice(row_offset..row_offset + row_data.len(), row_data);
             }
@@ -68,6 +93,7 @@ impl Texture {
             data,
             width: atlas.width,
             height: atlas.height,
+            format: atlas.format,
         }
     }
 }

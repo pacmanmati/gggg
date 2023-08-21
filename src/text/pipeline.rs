@@ -150,8 +150,7 @@ pub fn text_pipeline(render: &mut Render) -> (Pipeline, BindHandle) {
                 sample_type: wgpu::TextureSampleType::Float { filterable: false },
                 view_dimension: wgpu::TextureViewDimension::D2,
                 sample_count: 1,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                // format: wgpu::TextureFormat::R8Unorm,
+                format: wgpu::TextureFormat::R8Unorm,
                 size: Extent3d {
                     width: 1,
                     height: 1,

@@ -244,7 +244,8 @@ impl AppLoop for App {
             },
         ]);
 
-        let atlas_handle = render.register_atlas(defaults_bind, 1);
+        let atlas_handle =
+            render.register_atlas(defaults_bind, 1, gggg::texture::TextureFormat::Rgba8Unorm);
 
         let cobble_tex = Texture::from_path("cobble.png");
         let stone_tex = Texture::from_path("stone.png");

@@ -436,10 +436,15 @@ impl Render {
         &self.queue
     }
 
-    pub fn register_atlas(&mut self, handle: BindHandle, binding: u32) -> AtlasHandle {
+    pub fn register_atlas(
+        &mut self,
+        handle: BindHandle,
+        binding: u32,
+        format: crate::texture::TextureFormat,
+    ) -> AtlasHandle {
         let idx = self
             .atlases
-            .insert((handle, binding, Atlas::new(), HashMap::new()));
+            .insert((handle, binding, Atlas::new(format), HashMap::new()));
         AtlasHandle(idx)
     }
 
@@ -516,13 +521,13 @@ impl Render {
 
                 // update the atlas texture
                 let atlas_texture = Texture::from_atlas(atlas, rect_to_tex, &self.textures);
-                let _ = image::save_buffer(
-                    format!("atlas_{:?}.png", handle.into_raw_parts()),
-                    &atlas_texture.data,
-                    atlas_texture.width,
-                    atlas_texture.height,
-                    image::ColorType::Rgba8,
-                );
+                // let _ = image::save_buffer(
+                //     format!("atlas_{:?}.png", handle.into_raw_parts()),
+                //     &atlas_texture.data,
+                //     atlas_texture.width,
+                //     atlas_texture.height,
+                //     image::ColorType::Rgba8,
+                // );
                 self.write_texture(
                     &atlas_texture.data,
                     ImageDataLayout {

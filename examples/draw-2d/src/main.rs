@@ -12,7 +12,6 @@ use gggg::{
         font_bitmap_manager::FontBitmapManager,
         pipeline::{
             quad_geometry as text_quad_geometry, text_pipeline, TextGeometry, TextInstance,
-            TextRenderObject,
         },
         text_builder::TextBuilder,
     },
@@ -57,16 +56,6 @@ impl AppLoop for App {
                 far: 200.0,
             },
         );
-        //  Camera::new(
-        //     point![1.0, 0.0, 5.0],
-        //     point![0.0, 0.0, 0.0],
-        //     ProjectionType::Perspective {
-        //         aspect: window.inner_size().width as f32 / window.inner_size().height as f32,
-        //         fovy: 70.0,
-        //         near: 0.1,
-        //         far: 100.0,
-        //     },
-        // );
 
         let camera_data = camera.uniform();
         let camera_bytes = camera_data.as_bytes();
@@ -82,7 +71,8 @@ impl AppLoop for App {
         render.write_buffer(camera_bytes, defaults_bind, 0);
         render.write_buffer(camera_bytes, text_bind, 0);
 
-        let font_atlas_handle = render.register_atlas(text_bind, 1);
+        let font_atlas_handle =
+            render.register_atlas(text_bind, 1, gggg::texture::TextureFormat::R8Unorm);
         let roboto_manager = Rc::new(
             FontBitmapManager::new(&mut render, "Roboto.ttf", 100.0, font_atlas_handle).unwrap(),
         );
@@ -101,41 +91,9 @@ impl AppLoop for App {
     }
 
     fn draw(&mut self) {
-        // self.render.add_render_object(ShapeRenderObject {
-        //     transform: Translation3::new(10.0, 0.0, 0.0).to_homogeneous()
-        //         * Rotation3::new(Vector3::z() * FRAC_PI_4).to_homogeneous()
-        //         * Scale3::new(10.0, 10.0, 1.0).to_homogeneous(),
-
-        //     albedo: [0.0, 1.0, 0.0, 1.0],
-        //     pipeline_handle: self.shape_pipeline_handle,
-        //     mesh_handle: self.mesh_handle,
-        // });
-        // self.render.add_render_object(ShapeRenderObject {
-        //     transform: Translation3::new(5.0, 0.0, 0.0).to_homogeneous()
-        //         * Rotation3::new(Vector3::z() * FRAC_PI_4).to_homogeneous()
-        //         * Scale3::new(5.0, 5.0, 1.0).to_homogeneous(),
-        //     albedo: [0.0, 0.0, 1.0, 1.0],
-        //     pipeline_handle: self.shape_pipeline_handle,
-        //     mesh_handle: self.mesh_handle,
-        // });
-
-        let metric = self.roboto_manager.get_metric('A').unwrap();
-
-        // self.render.add_render_object(TextRenderObject {
-        //     transform: Translation3::new(0.0, 0.0, 0.0).to_homogeneous()
-        //         * Scale3::new(1.0 * glyph_aspect_ratio, 1.0 / glyph_aspect_ratio, 1.0)
-        //             .to_homogeneous(),
-        //     albedo: [1.0, 0.0, 0.0, 1.0],
-        //     pipeline_handle: self.text_pipeline_handle,
-        //     mesh_handle: self.text_mesh_handle,
-        //     character: 'A',
-        //     manager: self.roboto_manager.clone(),
-        // });
-
         TextBuilder::new(
             "hello world",
             [1.0, 1.0, 1.0, 1.0],
-            // Translation3::new(-100.0, 0.0, 0.0).to_homogeneous()
             Translation3::new(50.0, 50.0, 0.0).to_homogeneous()
                 * Scale3::new(1.0, 1.0, 1.0).to_homogeneous(),
             self.roboto_manager.clone(),

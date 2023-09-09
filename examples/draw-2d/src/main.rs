@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{f32::consts::TAU, rc::Rc};
 
 use gggg::{
     bind::BindHandle,
@@ -17,7 +17,7 @@ use gggg::{
     },
     window::{make_window, AppLoop},
 };
-use nalgebra::{point, Scale3, Translation3};
+use nalgebra::{point, Rotation3, Scale3, Translation3, Vector3};
 
 struct App {
     render: Render,
@@ -29,6 +29,10 @@ struct App {
     text_bind: BindHandle,
     text_mesh_handle: MeshHandle,
     roboto_manager: Rc<FontBitmapManager>,
+    rotation: f32,
+    r: f32,
+    g: f32,
+    b: f32,
 }
 
 impl AppLoop for App {
@@ -87,14 +91,26 @@ impl AppLoop for App {
             text_bind,
             text_mesh_handle,
             roboto_manager,
+            rotation: 0.0,
+            r: 0.5,
+            g: 0.25,
+            b: 0.75,
         }
     }
 
     fn draw(&mut self) {
+        self.rotation += TAU / 100.0;
+        self.r = (self.r + 0.001) % 1.0;
+        self.g = (self.g + 0.002) % 1.0;
+        self.b = (self.b + 0.003) % 1.0;
+
         TextBuilder::new(
             "hello world",
-            [1.0, 1.0, 1.0, 1.0],
+            [self.r, self.g, self.b, 1.0],
             Translation3::new(50.0, 50.0, 0.0).to_homogeneous()
+                // * Translation3::new(12.0, 1.0, 0.0).to_homogeneous()
+                * Rotation3::from_axis_angle(&Vector3::z_axis(), self.rotation).to_homogeneous()
+                // * Translation3::new(-12.0, -1.0, 0.0).to_homogeneous()
                 * Scale3::new(1.0, 1.0, 1.0).to_homogeneous(),
             self.roboto_manager.clone(),
             self.text_pipeline_handle,

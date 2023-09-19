@@ -6,8 +6,10 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use fontdue::{Font, FontSettings, Metrics};
+use sdf_glyph_renderer::BitmapGlyph;
 
 use crate::{
+    plain::Plain,
     render::{AtlasHandle, Render, TextureHandle},
     texture::Texture,
 };
@@ -39,14 +41,18 @@ impl FontBitmapManager {
             .chars()
             .iter()
             .map(|(c, _)| {
-                let (metrics, mut bitmap) = font.rasterize(*c, px);
-                // bitmap = bitmap.iter().fold(vec![], |mut acc, val| {
-                //     // acc.extend_from_slice(&[v, v, v, 255]);
-                //     acc.extend_from_slice(&[255, 255, 255, *val]);
-                //     acc
-                // });
+                let (metrics, bitmap) = font.rasterize(*c, px);
+                // let buffer = 0u32;
+                // let bitmap = BitmapGlyph::from_unbuffered(
+                //     bitmap.as_bytes(),
+                //     metrics.width,
+                //     metrics.height,
+                //     buffer as usize,
+                // )
+                // .unwrap();
+                // let sdf = bitmap.render_sdf(10);
+                // let sdf_bitmap = sdf.as_bytes().to_vec();
 
-                // assert!(bitmap.len() == metrics.width * metrics.height * 4);
                 let texture = Texture {
                     data: bitmap,
                     width: metrics.width as u32,

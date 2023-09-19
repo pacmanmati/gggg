@@ -78,7 +78,7 @@ impl AppLoop for App {
         let font_atlas_handle =
             render.register_atlas(text_bind, 1, gggg::texture::TextureFormat::R8Unorm);
         let roboto_manager = Rc::new(
-            FontBitmapManager::new(&mut render, "Roboto.ttf", 100.0, font_atlas_handle).unwrap(),
+            FontBitmapManager::new(&mut render, "Roboto.ttf", 400.0, font_atlas_handle).unwrap(),
         );
 
         App {
@@ -99,19 +99,19 @@ impl AppLoop for App {
     }
 
     fn draw(&mut self) {
-        self.rotation += TAU / 100.0;
-        self.r = (self.r + 0.001) % 1.0;
-        self.g = (self.g + 0.002) % 1.0;
-        self.b = (self.b + 0.003) % 1.0;
+        // self.rotation += TAU / 100.0;
+        // self.r = (self.r + 0.001) % 1.0;
+        // self.g = (self.g + 0.002) % 1.0;
+        // self.b = (self.b + 0.003) % 1.0;
 
         TextBuilder::new(
             "hello world",
             [self.r, self.g, self.b, 1.0],
-            Translation3::new(50.0, 50.0, 0.0).to_homogeneous()
+            Translation3::new(0.0, 50.0, 0.0).to_homogeneous()
                 // * Translation3::new(12.0, 1.0, 0.0).to_homogeneous()
                 * Rotation3::from_axis_angle(&Vector3::z_axis(), self.rotation).to_homogeneous()
                 // * Translation3::new(-12.0, -1.0, 0.0).to_homogeneous()
-                * Scale3::new(1.0, 1.0, 1.0).to_homogeneous(),
+                * Scale3::new(4.0, 4.0, 4.0).to_homogeneous(),
             self.roboto_manager.clone(),
             self.text_pipeline_handle,
             self.text_mesh_handle,

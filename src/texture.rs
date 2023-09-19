@@ -11,6 +11,7 @@ use crate::{
 pub enum TextureFormat {
     Rgba8Unorm,
     R8Unorm,
+    Rgba16,
 }
 
 impl TextureFormat {
@@ -18,6 +19,7 @@ impl TextureFormat {
         match self {
             TextureFormat::Rgba8Unorm => 4,
             TextureFormat::R8Unorm => 1,
+            TextureFormat::Rgba16 => 8,
         }
     }
 }

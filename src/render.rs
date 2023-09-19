@@ -521,13 +521,13 @@ impl Render {
 
                 // update the atlas texture
                 let atlas_texture = Texture::from_atlas(atlas, rect_to_tex, &self.textures);
-                // let _ = image::save_buffer(
-                //     format!("atlas_{:?}.png", handle.into_raw_parts()),
-                //     &atlas_texture.data,
-                //     atlas_texture.width,
-                //     atlas_texture.height,
-                //     image::ColorType::Rgba8,
-                // );
+                let _ = image::save_buffer(
+                    format!("sdf_atlas_{:?}.png", handle.into_raw_parts()),
+                    &atlas_texture.data,
+                    atlas_texture.width,
+                    atlas_texture.height,
+                    image::ColorType::Rgba8,
+                );
                 self.write_texture(
                     &atlas_texture.data,
                     ImageDataLayout {

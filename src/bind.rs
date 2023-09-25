@@ -14,8 +14,8 @@ use wgpu::{
 #[derive(Clone, Copy)]
 pub struct BindHandle(pub Index);
 
-#[derive(Clone, Copy)]
-pub enum BindEntryType {
+#[derive(Clone)]
+pub enum BindEntryType<'a> {
     BufferUniform {
         size: u64,
         usages: BufferUsages,
@@ -25,7 +25,10 @@ pub enum BindEntryType {
         read_only: bool,
         usages: BufferUsages,
     },
-    Sampler(SamplerBindingType),
+    Sampler {
+        binding_type: SamplerBindingType,
+        descriptor: SamplerDescriptor<'a>,
+    },
     Texture {
         sample_type: TextureSampleType,
         view_dimension: TextureViewDimension,
@@ -71,41 +74,46 @@ impl BindEntryResource {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct BindEntry {
+#[derive(Clone)]
+pub struct BindEntry<'a> {
     pub visibility: ShaderStages,
-    pub ty: BindEntryType,
+    pub ty: BindEntryType<'a>,
     pub count: Option<NonZeroU32>,
     // Pass as None. This will be removed.
     // pub resource: Option<BindEntryResource>,
 }
 
-impl BindEntry {
+impl<'a> BindEntry<'a> {
     pub fn layout_entry(&self, binding: u32) -> BindGroupLayoutEntry {
         BindGroupLayoutEntry {
             binding,
             visibility: self.visibility,
-            ty: match self.ty {
+            ty: match &self.ty {
                 BindEntryType::BufferUniform { .. } => wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
                 BindEntryType::BufferStorage { read_only, .. } => wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only },
+                    ty: wgpu::BufferBindingType::Storage {
+                        read_only: *read_only,
+                    },
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
-                BindEntryType::Sampler(ty) => wgpu::BindingType::Sampler(ty),
+                BindEntryType::Sampler {
+                    binding_type,
+                    descriptor,
+                } => wgpu::BindingType::Sampler(*binding_type),
                 BindEntryType::Texture {
                     sample_type,
                     view_dimension,
                     sample_count,
                     ..
                 } => wgpu::BindingType::Texture {
-                    sample_type,
-                    view_dimension,
-                    multisampled: sample_count != 1,
+                    sample_type: *sample_type,
+                    view_dimension: *view_dimension,
+                    multisampled: *sample_count != 1,
                 },
                 BindEntryType::StorageTexture {
                     access,
@@ -113,22 +121,22 @@ impl BindEntry {
                     view_dimension,
                     ..
                 } => wgpu::BindingType::StorageTexture {
-                    access,
-                    format,
-                    view_dimension,
+                    access: *access,
+                    format: *format,
+                    view_dimension: *view_dimension,
                 },
             },
             count: self.count,
         }
     }
 
-    pub fn group_entry<'a>(
-        &'a self,
+    pub fn group_entry<'b>(
+        &'b self,
         binding: u32,
         // device: &Device,
-        resource: &'a BindEntryResource,
+        resource: &'b BindEntryResource,
     ) -> BindGroupEntry {
-        let binding_resource = match self.ty {
+        let binding_resource = match &self.ty {
             BindEntryType::BufferUniform { size, usages }
             | BindEntryType::BufferStorage { size, usages, .. } => {
                 wgpu::BindingResource::Buffer(BufferBinding {
@@ -137,7 +145,10 @@ impl BindEntry {
                     size: None,
                 })
             }
-            BindEntryType::Sampler(..) => wgpu::BindingResource::Sampler(resource.sampler()),
+            BindEntryType::Sampler {
+                binding_type,
+                descriptor,
+            } => wgpu::BindingResource::Sampler(resource.sampler()),
             BindEntryType::Texture {
                 view_dimension,
                 sample_count,
@@ -162,8 +173,8 @@ impl BindEntry {
         }
     }
 
-    pub fn sampler(&self, device: &Device) -> Sampler {
-        device.create_sampler(&SamplerDescriptor::default())
+    pub fn sampler(&self, device: &Device, sampler_descriptor: SamplerDescriptor) -> Sampler {
+        device.create_sampler(&sampler_descriptor)
     }
 
     pub fn buffer(&self, device: &Device, size: u64, usage: BufferUsages) -> Buffer {
@@ -199,12 +210,14 @@ impl BindEntry {
     }
 
     pub fn binding_resource(&self, device: &Device) -> BindEntryResource {
-        match self.ty {
+        match &self.ty {
             BindEntryType::BufferUniform { size, usages }
             | BindEntryType::BufferStorage { size, usages, .. } => {
-                BindEntryResource::Buffer(self.buffer(device, size, usages))
+                BindEntryResource::Buffer(self.buffer(device, *size, *usages))
             }
-            BindEntryType::Sampler(..) => BindEntryResource::Sampler(self.sampler(device)),
+            BindEntryType::Sampler { descriptor, .. } => {
+                BindEntryResource::Sampler(self.sampler(device, descriptor.clone()))
+            }
             BindEntryType::Texture {
                 view_dimension,
                 sample_count,
@@ -213,8 +226,14 @@ impl BindEntry {
                 usage,
                 ..
             } => {
-                let (texture, view) =
-                    self.texture(device, size, sample_count, view_dimension, format, usage);
+                let (texture, view) = self.texture(
+                    device,
+                    *size,
+                    *sample_count,
+                    *view_dimension,
+                    *format,
+                    *usage,
+                );
                 BindEntryResource::Texture(texture, view)
             }
             BindEntryType::StorageTexture {
@@ -225,23 +244,29 @@ impl BindEntry {
                 usage,
                 ..
             } => {
-                let (texture, view) =
-                    self.texture(device, size, sample_count, view_dimension, format, usage);
+                let (texture, view) = self.texture(
+                    device,
+                    *size,
+                    *sample_count,
+                    *view_dimension,
+                    *format,
+                    *usage,
+                );
                 BindEntryResource::Texture(texture, view)
             }
         }
     }
 }
 
-pub struct Bind {
+pub struct Bind<'a> {
     pub bg: Option<BindGroup>,
     pub bgl: BindGroupLayout,
     pub resources: Vec<BindEntryResource>,
-    pub bind_entries: Vec<BindEntry>,
+    pub bind_entries: Vec<BindEntry<'a>>,
 }
 
-impl Bind {
-    pub fn new(mut bind_entries: Vec<BindEntry>, device: &Device) -> Self {
+impl<'a> Bind<'a> {
+    pub fn new(mut bind_entries: Vec<BindEntry<'a>>, device: &Device) -> Self {
         let layout_entries = bind_entries
             .iter()
             .enumerate()

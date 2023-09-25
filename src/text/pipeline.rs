@@ -1,7 +1,9 @@
 use std::rc::Rc;
 
 use nalgebra::{Matrix4, Vector4};
-use wgpu::{vertex_attr_array, BufferUsages, Extent3d, ShaderStages, TextureUsages};
+use wgpu::{
+    vertex_attr_array, BufferUsages, Extent3d, SamplerDescriptor, ShaderStages, TextureUsages,
+};
 
 use crate::{
     bind::{BindEntry, BindEntryType, BindHandle},
@@ -147,7 +149,7 @@ pub fn text_pipeline(render: &mut Render) -> (Pipeline, BindHandle) {
         BindEntry {
             visibility: ShaderStages::FRAGMENT,
             ty: BindEntryType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
                 view_dimension: wgpu::TextureViewDimension::D2,
                 sample_count: 1,
                 format: wgpu::TextureFormat::R8Unorm,
@@ -163,7 +165,15 @@ pub fn text_pipeline(render: &mut Render) -> (Pipeline, BindHandle) {
         // sampler
         BindEntry {
             visibility: ShaderStages::FRAGMENT,
-            ty: BindEntryType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+            ty: BindEntryType::Sampler {
+                binding_type: wgpu::SamplerBindingType::Filtering,
+                descriptor: SamplerDescriptor {
+                    mag_filter: wgpu::FilterMode::Linear,
+                    min_filter: wgpu::FilterMode::Linear,
+                    mipmap_filter: wgpu::FilterMode::Linear,
+                    ..Default::default()
+                },
+            },
             count: None,
         },
     ]);

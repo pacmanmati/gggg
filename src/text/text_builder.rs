@@ -1,13 +1,11 @@
-use std::{borrow::BorrowMut, rc::Rc};
+use std::rc::Rc;
 
 use anyhow::Result;
 use nalgebra::{Matrix4, Scale3, Translation3};
 
 use crate::{
-    material::BasicMaterial,
     pipeline::PipelineHandle,
-    render::{Mesh, MeshHandle, Render},
-    text::pipeline::{TextGeometry, TextInstance, TextVertex},
+    render::{MeshHandle, Render},
 };
 
 use super::{font_bitmap_manager::FontBitmapManager, pipeline::TextRenderObject};
@@ -48,7 +46,7 @@ impl TextBuilder {
         let mut x = 0.0;
         let mut y = 0.0;
 
-        let scale = self.scale;
+        let scale = self.scale / self.font_manager.px;
 
         for character in self.text.chars() {
             let metrics = self.font_manager.get_metric(character)?;

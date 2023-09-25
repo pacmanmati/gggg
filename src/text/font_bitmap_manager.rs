@@ -6,10 +6,8 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use fontdue::{Font, FontSettings, Metrics};
-use sdf_glyph_renderer::BitmapGlyph;
 
 use crate::{
-    plain::Plain,
     render::{AtlasHandle, Render, TextureHandle},
     texture::Texture,
 };
@@ -22,6 +20,7 @@ use crate::{
 pub struct FontBitmapManager {
     map: HashMap<char, (TextureHandle, Metrics)>,
     pub atlas_handle: AtlasHandle,
+    pub px: f32,
 }
 
 impl FontBitmapManager {
@@ -37,26 +36,32 @@ impl FontBitmapManager {
         let _ = reader.read_to_end(&mut buf)?;
         let font = Font::from_bytes(buf, FontSettings::default()).map_err(|err| anyhow!(err))?;
 
-        let map = font
-            .chars()
+        let map = 
+        // font
+            // .chars()
+            [('h', 0), ('e', 0), ('l', 0), ('o', 0), ('w', 0), ('r', 0), ('d', 0), (' ', 0)]
             .iter()
             .map(|(c, _)| {
                 let (metrics, bitmap) = font.rasterize(*c, px);
-                // let buffer = 0u32;
-                // let bitmap = BitmapGlyph::from_unbuffered(
-                //     bitmap.as_bytes(),
-                //     metrics.width,
-                //     metrics.height,
-                //     buffer as usize,
-                // )
-                // .unwrap();
-                // let sdf = bitmap.render_sdf(10);
-                // let sdf_bitmap = sdf.as_bytes().to_vec();
+                // println!("{metrics:?}, {c}");
+
+                let sdf_bitmap = msdf::sdf(
+                    &msdf::bitmap::Bitmap {
+                        data: bitmap,
+                        dimensions: (metrics.width as u32, metrics.height as u32),
+                    },
+                    (64, 64),
+                    20,
+                );
 
                 let texture = Texture {
-                    data: bitmap,
-                    width: metrics.width as u32,
-                    height: metrics.height as u32,
+                    data: sdf_bitmap
+                        .into_iter()
+                        // .flat_map(|val| val.to_le_bytes())
+                        .map(|val| (val * 255.0).floor() as u8)
+                        .collect(),
+                    width: 64,
+                    height: 64,
                     format: crate::texture::TextureFormat::R8Unorm,
                 };
                 let texture_handle = render.add_texture(texture, atlas_handle)?;
@@ -64,7 +69,11 @@ impl FontBitmapManager {
             })
             .collect::<Result<HashMap<char, (TextureHandle, Metrics)>>>()?;
 
-        Ok(Self { map, atlas_handle })
+        Ok(Self {
+            map,
+            atlas_handle,
+            px,
+        })
     }
 
     pub fn get_metric(&self, character: char) -> Result<Metrics> {

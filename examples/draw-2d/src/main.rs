@@ -19,8 +19,8 @@ use gggg::{
 };
 use nalgebra::{point, Rotation3, Scale3, Translation3, Vector3};
 
-struct App {
-    render: Render,
+struct App<'a> {
+    render: Render<'a>,
     shape_pipeline_handle: PipelineHandle,
     mesh_handle: MeshHandle,
     camera: Camera,
@@ -35,8 +35,8 @@ struct App {
     b: f32,
 }
 
-impl AppLoop for App {
-    type App = App;
+impl<'a> AppLoop for App<'a> {
+    type App = App<'a>;
 
     fn init(window: &winit::window::Window) -> Self::App {
         let mut render = Render::new(window).unwrap();
@@ -78,7 +78,8 @@ impl AppLoop for App {
         let font_atlas_handle =
             render.register_atlas(text_bind, 1, gggg::texture::TextureFormat::R8Unorm);
         let roboto_manager = Rc::new(
-            FontBitmapManager::new(&mut render, "Roboto.ttf", 400.0, font_atlas_handle).unwrap(),
+            FontBitmapManager::new(&mut render, "Roboto.ttf", 4096.0 / 4.0, font_atlas_handle)
+                .unwrap(),
         );
 
         App {
@@ -111,11 +112,11 @@ impl AppLoop for App {
                 // * Translation3::new(12.0, 1.0, 0.0).to_homogeneous()
                 * Rotation3::from_axis_angle(&Vector3::z_axis(), self.rotation).to_homogeneous()
                 // * Translation3::new(-12.0, -1.0, 0.0).to_homogeneous()
-                * Scale3::new(4.0, 4.0, 4.0).to_homogeneous(),
+                * Scale3::new(20.0, 20.0, 1.0).to_homogeneous(),
             self.roboto_manager.clone(),
             self.text_pipeline_handle,
             self.text_mesh_handle,
-            0.05,
+            1.0,
         )
         .build(&mut self.render)
         .unwrap()

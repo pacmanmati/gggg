@@ -28,13 +28,13 @@ use crate::{
 struct MeshAndPipelineHandleComposite(MeshHandle, PipelineHandle);
 
 // renderer draws meshes
-pub struct Render {
+pub struct Render<'a> {
     adapter: Adapter,
     device: Option<Device>,
     queue: Queue,
     surface: Surface,
     pipelines: Arena<Pipeline>,
-    binds: Arena<Bind>,
+    binds: Arena<Bind<'a>>,
     meshes: Arena<(
         Mesh<Box<dyn Geometry>, Box<dyn Material>>,
         Buffer,         // vertex
@@ -68,7 +68,7 @@ pub struct Render {
     depth_texture: wgpu::Texture,
 }
 
-impl Render {
+impl<'a> Render<'a> {
     fn replace_resource(&mut self, resource: BindEntryResource, handle: BindHandle, binding: u32) {
         let device = self.device.take();
         let bind = self.get_bind_mut(handle).unwrap();
@@ -448,12 +448,12 @@ impl Render {
         AtlasHandle(idx)
     }
 
-    pub fn build_bind(&mut self, bind_entries: &mut [BindEntry]) -> BindHandle {
+    pub fn build_bind(&mut self, bind_entries: &mut [BindEntry<'a>]) -> BindHandle {
         let bind = Bind::new(bind_entries.to_vec(), self.device.as_ref().unwrap());
         self.add_bind(bind)
     }
 
-    fn add_bind(&mut self, bind: Bind) -> BindHandle {
+    fn add_bind(&mut self, bind: Bind<'a>) -> BindHandle {
         BindHandle(self.binds.insert(bind))
     }
 
@@ -463,7 +463,7 @@ impl Render {
             .ok_or(anyhow!("No Bind for handle"))
     }
 
-    pub fn get_bind_mut(&mut self, handle: BindHandle) -> Result<&mut Bind> {
+    pub fn get_bind_mut(&mut self, handle: BindHandle) -> Result<&mut Bind<'a>> {
         self.binds
             .get_mut(handle.0)
             .ok_or(anyhow!("No Bind for handle"))
@@ -526,7 +526,7 @@ impl Render {
                     &atlas_texture.data,
                     atlas_texture.width,
                     atlas_texture.height,
-                    image::ColorType::Rgba8,
+                    image::ColorType::L8,
                 );
                 self.write_texture(
                     &atlas_texture.data,

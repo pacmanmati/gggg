@@ -32,3 +32,4 @@ rand = "0.8.5"
 sdf_glyph_renderer = "1.0.0"
 wgpu = "0.16.1"
 winit = "0.28.6"
+msdf = { path = "../msdf" }

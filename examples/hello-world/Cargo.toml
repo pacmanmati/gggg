@@ -8,6 +8,4 @@ edition = "2021"
 [dependencies]
 gggg = { path = "../../" }
 image = "0.24.6"
-wgpu = "0.16.1"
 nalgebra = "0.32.2"
-winit = "0.28.6"

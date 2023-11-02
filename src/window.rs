@@ -43,7 +43,7 @@ impl App {
 
     pub fn run<T: AppLoop + 'static>(self, app_loop_init: fn(&Window) -> T) {
         let size = self.size.unwrap_or((300, 300));
-        let event_loop = EventLoop::new();
+        let event_loop = EventLoop::new().unwrap();
         let window = WindowBuilder::new()
             .with_inner_size(LogicalSize::new(size.0, size.1))
             .with_title(self.title)
@@ -54,13 +54,13 @@ impl App {
 
         let mut now = Instant::now();
 
-        event_loop.run(move |event, _target, cf| match event {
+        event_loop.run(move |event, target| match event {
             winit::event::Event::WindowEvent {
                 window_id: _,
                 event,
             } => match event {
                 winit::event::WindowEvent::Resized(new_size) => app_loop.resized(new_size),
-                winit::event::WindowEvent::CloseRequested => cf.set_exit(),
+                winit::event::WindowEvent::CloseRequested => target.exit(),
                 // winit::event::WindowEvent::AxisMotion {
                 //     device_id,
                 //     axis,
@@ -83,7 +83,7 @@ impl App {
                     app_loop.input(InputEvent::mouse_motion(event));
                 }
             }
-            winit::event::Event::MainEventsCleared => {
+            winit::event::Event::AboutToWait => {
                 if now.elapsed().as_secs_f32() >= 1.0 / self.frame_rate {
                     now = Instant::now();
                     app_loop.draw();

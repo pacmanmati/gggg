@@ -6,7 +6,7 @@ use gggg::{
     material::BasicMaterial,
     pipeline::PipelineHandle,
     plain::Plain,
-    render::{Mesh, MeshHandle, Render},
+    render::{Mesh, MeshHandle, PhysicalSize, Render, Window},
     shapes::{quad_geometry, shape_pipeline, ShapeGeometry, ShapeInstance},
     text::{
         font_bitmap_manager::FontBitmapManager,
@@ -38,7 +38,7 @@ struct App<'a> {
 impl<'a> AppLoop for App<'a> {
     type App = App<'a>;
 
-    fn init(window: &winit::window::Window) -> Self::App {
+    fn init(window: &Window) -> Self::App {
         let mut render = Render::new(window).unwrap();
         let (shape_pipeline, defaults_bind) = shape_pipeline(&mut render);
         let shape_pipeline_handle = render.add_pipeline(shape_pipeline);
@@ -126,7 +126,7 @@ impl<'a> AppLoop for App<'a> {
         self.render.draw();
     }
 
-    fn resized(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    fn resized(&mut self, new_size: PhysicalSize<u32>) {
         self.render.resize(new_size);
 
         self.camera = Camera::new(

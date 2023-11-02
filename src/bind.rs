@@ -4,10 +4,14 @@ use generational_arena::Index;
 use itertools::Itertools;
 use wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, Buffer, BufferBinding, BufferDescriptor, BufferUsages, Device, Extent3d,
-    Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, StorageTextureAccess, Texture,
-    TextureDescriptor, TextureFormat, TextureSampleType, TextureUsages, TextureView,
-    TextureViewDescriptor, TextureViewDimension, VertexAttribute, VertexBufferLayout,
+    BindGroupLayoutEntry, Buffer, BufferBinding, BufferDescriptor, Device, Sampler,
+    StorageTextureAccess, Texture, TextureDescriptor, TextureView, TextureViewDescriptor,
+    VertexAttribute, VertexBufferLayout,
+};
+
+pub use wgpu::{
+    vertex_attr_array, BufferUsages, Extent3d, Face, SamplerBindingType, SamplerDescriptor,
+    ShaderStages, TextureFormat, TextureSampleType, TextureUsages, TextureViewDimension,
     VertexStepMode,
 };
 

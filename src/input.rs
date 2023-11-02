@@ -1,9 +1,12 @@
-use winit::event::{DeviceEvent, ElementState, VirtualKeyCode, WindowEvent};
+use winit::{
+    event::{DeviceEvent, ElementState, WindowEvent},
+    keyboard::{Key, SmolStr},
+};
 
 #[derive(Debug)]
 pub enum InputEvent {
     MouseInput(MouseInputEvent),
-    KeyboardInput { key: VirtualKeyCode, pressed: bool },
+    KeyboardInput { key: Key<SmolStr>, pressed: bool },
 }
 
 impl InputEvent {
@@ -27,9 +30,10 @@ impl InputEvent {
     }
     pub fn keyboard_input(event: WindowEvent) -> InputEvent {
         match event {
-            WindowEvent::KeyboardInput { input, .. } => InputEvent::KeyboardInput {
-                key: input.virtual_keycode.unwrap(),
-                pressed: input.state == ElementState::Pressed,
+            WindowEvent::KeyboardInput { event, .. } => InputEvent::KeyboardInput {
+                // key: input.virtual_keycode.unwrap(),
+                key: event.logical_key,
+                pressed: event.state == ElementState::Pressed,
             },
             _ => unreachable!(),
         }
@@ -53,6 +57,7 @@ impl InputEvent {
                         winit::event::MouseButton::Right => MouseButton::MouseRight,
                         winit::event::MouseButton::Middle => MouseButton::MouseMiddle,
                         winit::event::MouseButton::Other(_) => MouseButton::MouseLeft, // todo: handle
+                        _ => panic!("Unhandled mouse input button."),
                     },
                     pressed: state == ElementState::Pressed,
                 })

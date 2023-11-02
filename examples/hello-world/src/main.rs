@@ -1,19 +1,21 @@
 use gggg::{
-    bind::{BindEntry, BindEntryType, BindHandle},
+    bind::{
+        vertex_attr_array, BindEntry, BindEntryType, BindHandle, BufferUsages, Extent3d, Face,
+        SamplerBindingType, SamplerDescriptor, ShaderStages, TextureFormat, TextureSampleType,
+        TextureUsages, TextureViewDimension, VertexStepMode,
+    },
     camera::{Camera, ProjectionType},
     geometry::Geometry,
     instance::InstanceData,
     material::BasicMaterial,
     pipeline::{PipelineBuilder, PipelineHandle},
     plain::Plain,
-    render::{AtlasHandle, Mesh, MeshHandle, Render, TextureHandle},
+    render::{AtlasHandle, Mesh, MeshHandle, PhysicalSize, Render, TextureHandle, Window},
     render_object::BasicRenderObject,
     texture::Texture,
     window::{make_window, AppLoop},
 };
 use nalgebra::{point, Matrix4, Translation3, Vector4};
-use wgpu::{vertex_attr_array, BufferUsages, Extent3d, ShaderStages, TextureUsages};
-use winit::{event::VirtualKeyCode, window::Window};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -147,8 +149,8 @@ unsafe impl Plain for CameraUniform {}
 //     }
 // }
 
-struct App {
-    render: Render,
+struct App<'a> {
+    render: Render<'a>,
     camera: Camera,
     rot_y: f32,
     rot_x: f32,
@@ -161,7 +163,7 @@ struct App {
     atlas_handle: AtlasHandle,
 }
 
-impl App {
+impl<'a> App<'a> {
     pub fn update_camera(&mut self) {
         let x = self.camera_distance * self.rot_y.cos();
         let z = self.camera_distance * self.rot_y.sin();
@@ -191,10 +193,10 @@ impl App {
     }
 }
 
-impl AppLoop for App {
+impl<'a> AppLoop for App<'a> {
     type App = Self;
 
-    fn init(window: &Window) -> App {
+    fn init(window: &Window) -> App<'a> {
         let mut render = Render::new(window).unwrap();
 
         let camera = Camera::new(
@@ -229,10 +231,10 @@ impl AppLoop for App {
             BindEntry {
                 visibility: ShaderStages::FRAGMENT,
                 ty: BindEntryType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: TextureSampleType::Float { filterable: false },
+                    view_dimension: TextureViewDimension::D2,
                     sample_count: 1,
-                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    format: TextureFormat::Rgba8Unorm,
                     size: Extent3d {
                         width: 512,
                         height: 100,
@@ -255,7 +257,10 @@ impl AppLoop for App {
 
         let sampler_bind_handle = render.build_bind(&mut [BindEntry {
             visibility: ShaderStages::FRAGMENT,
-            ty: BindEntryType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+            ty: BindEntryType::Sampler {
+                binding_type: SamplerBindingType::NonFiltering,
+                descriptor: SamplerDescriptor::default(),
+            },
             count: None,
         }]);
 
@@ -293,18 +298,18 @@ impl AppLoop for App {
         render.write_buffer(light_data.as_bytes(), lights_bind_handle, 0);
 
         let pipeline = PipelineBuilder::new()
-            .with_cull_mode(Some(wgpu::Face::Back))
+            .with_cull_mode(Some(Face::Back))
             .with_bind(defaults_bind)
             .with_bind(sampler_bind_handle)
             .with_bind(lights_bind_handle)
-            .with_format(wgpu::TextureFormat::Bgra8UnormSrgb)
+            .with_format(TextureFormat::Bgra8UnormSrgb)
             .with_shader(include_str!("shader.wgsl"))
             .with_vb::<Vertex>(
-                wgpu::VertexStepMode::Vertex,
+                VertexStepMode::Vertex,
                 &vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Float32x3],
             )
             .with_vb::<Instance>(
-                wgpu::VertexStepMode::Instance,
+                VertexStepMode::Instance,
                 &vertex_attr_array![3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32x4, 7 => Float32x4],
             )
             .build(&render);
@@ -412,16 +417,16 @@ impl AppLoop for App {
     }
 
     fn input(&mut self, input: gggg::input::InputEvent) {
-        // println!("{:?}", input);
+        println!("{:?}", input);
         match input {
             gggg::input::InputEvent::KeyboardInput { key, pressed } => {
-                if key == VirtualKeyCode::Q {
+                if key == "q" {
                     self.zoom_camera((0.0, 10.0));
-                } else if key == VirtualKeyCode::E {
+                } else if key == "e" {
                     self.zoom_camera((0.0, -10.0));
-                } else if key == VirtualKeyCode::T && pressed {
+                } else if key == "t" && pressed {
                     let texture = Texture::from_path("red.png");
-                    self.render.add_texture(texture, self.atlas_handle);
+                    let _ = self.render.add_texture(texture, self.atlas_handle);
                 }
             }
             gggg::input::InputEvent::MouseInput(input) => match input {
@@ -433,7 +438,7 @@ impl AppLoop for App {
         }
     }
 
-    fn resized(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    fn resized(&mut self, new_size: PhysicalSize<u32>) {
         self.render.resize(new_size);
 
         self.camera = Camera::new(

@@ -11,7 +11,7 @@ use wgpu::{
     RequestAdapterOptions, Surface, SurfaceConfiguration, TextureDescriptor, TextureDimension,
     TextureFormat, TextureUsages, TextureViewDescriptor,
 };
-use winit::{dpi::PhysicalSize, window::Window};
+pub use winit::{dpi::PhysicalSize, window::Window};
 
 use crate::{
     atlas::{Atlas, RectHandle},
@@ -488,6 +488,8 @@ impl<'a> Render<'a> {
             },
         );
 
+        println!("{:?}", size); // debug
+
         self.depth_texture = self.device().create_texture(&TextureDescriptor {
             label: Some("depth texture"),
             size: Extent3d {
@@ -587,17 +589,19 @@ impl<'a> Render<'a> {
                         b: 0.05,
                         a: 1.0,
                     }),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                 view: depth_texture_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
             }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         for (pipeline_handle, meshes_and_render_objects) in draw_map.iter() {

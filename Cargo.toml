@@ -13,6 +13,7 @@ path = "examples/draw-2d/src/main.rs"
 members = [
     "examples/hello-world",
     "examples/draw-2d",
+    "examples/falling-sand",
     "crates/gggg_macros",
     "crates/gggg_ui",
     "crates/gggg_asset",

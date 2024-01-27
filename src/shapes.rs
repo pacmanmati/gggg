@@ -68,7 +68,8 @@ pub fn shape_pipeline(render: &mut Render) -> (Pipeline, BindHandle) {
 
     let pipeline_handle = PipelineBuilder::new()
         .with_format(wgpu::TextureFormat::Bgra8UnormSrgb)
-        .with_cull_mode(Some(wgpu::Face::Back))
+        // .with_cull_mode(Some(wgpu::Face::Back))
+        .with_cull_mode(None)
         .with_bind(defaults_bind)
         .with_shader(include_str!("shaders/shapes.wgsl"))
         .with_vb::<ShapeVertex>(
@@ -115,6 +116,23 @@ pub const fn quad_shape() -> [ShapeVertex; 4] {
         },
         ShapeVertex {
             pos: [0.5, 0.5, 0.0],
+        },
+    ]
+}
+
+pub fn quad_shape_offset(x_off: f32, y_off: f32) -> [ShapeVertex; 4] {
+    [
+        ShapeVertex {
+            pos: [-0.5 + x_off, -0.5 + y_off, 0.0],
+        },
+        ShapeVertex {
+            pos: [0.5 + x_off, -0.5 + y_off, 0.0],
+        },
+        ShapeVertex {
+            pos: [-0.5 + x_off, 0.5 + y_off, 0.0],
+        },
+        ShapeVertex {
+            pos: [0.5 + x_off, 0.5 + y_off, 0.0],
         },
     ]
 }

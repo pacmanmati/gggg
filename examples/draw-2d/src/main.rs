@@ -93,9 +93,9 @@ impl<'a> AppLoop for App<'a> {
             text_mesh_handle,
             roboto_manager,
             rotation: 0.0,
-            r: 0.5,
-            g: 0.25,
-            b: 0.75,
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
         }
     }
 

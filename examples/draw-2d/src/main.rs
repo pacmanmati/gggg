@@ -38,7 +38,7 @@ struct App<'a> {
 impl<'a> AppLoop for App<'a> {
     type App = App<'a>;
 
-    fn init(window: &Window) -> Self::App {
+    fn init(window: &Window, gggg: &gggg::window::App) -> Self::App {
         let mut render = Render::new(window).unwrap();
         let (shape_pipeline, defaults_bind) = shape_pipeline(&mut render);
         let shape_pipeline_handle = render.add_pipeline(shape_pipeline);
@@ -99,7 +99,7 @@ impl<'a> AppLoop for App<'a> {
         }
     }
 
-    fn draw(&mut self) {
+    fn draw(&mut self, gggg: &gggg::window::App) {
         // self.rotation += TAU / 100.0;
         // self.r = (self.r + 0.001) % 1.0;
         // self.g = (self.g + 0.002) % 1.0;

@@ -196,7 +196,7 @@ impl<'a> App<'a> {
 impl<'a> AppLoop for App<'a> {
     type App = Self;
 
-    fn init(window: &Window) -> App<'a> {
+    fn init(window: &Window, gggg: &gggg::window::App) -> App<'a> {
         let mut render = Render::new(window).unwrap();
 
         let camera = Camera::new(
@@ -396,7 +396,7 @@ impl<'a> AppLoop for App<'a> {
         }
     }
 
-    fn draw(&mut self) {
+    fn draw(&mut self, gggg: &gggg::window::App) {
         self.render.add_render_object(BasicRenderObject {
             pipeline_handle: self.pipeline_handle,
             mesh_handle: self.cube_handle,
@@ -416,7 +416,7 @@ impl<'a> AppLoop for App<'a> {
         self.render.draw();
     }
 
-    fn input(&mut self, input: gggg::input::InputEvent) {
+    fn input(&mut self, input: gggg::input::InputEvent, gggg: &gggg::window::App) {
         println!("{:?}", input);
         match input {
             gggg::input::InputEvent::KeyboardInput { key, pressed } => {

@@ -11,9 +11,7 @@ path = "examples/draw-2d/src/main.rs"
 
 [workspace]
 members = [
-    "examples/hello-world",
-    "examples/draw-2d",
-    "examples/falling-sand",
+    "examples/*",
     "crates/gggg_macros",
     "crates/gggg_ui",
     "crates/gggg_asset",

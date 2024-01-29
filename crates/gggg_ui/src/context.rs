@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use asset::loader::Loader;
+use gggg_asset::loader::Loader;
 
 use crate::styles::text_style::{TextStyleComputed, TextStyleHandle};
 

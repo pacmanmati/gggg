@@ -52,7 +52,9 @@ pub trait DrainShapes {
     fn glyphs_inner(&mut self) -> Vec<GlyphShape>;
     fn glyphs(&mut self) -> Vec<UIShape>;
     fn rectangles_inner(&mut self) -> Vec<RectangleShape>;
-    fn rectangles(&mut self) -> impl Iterator<Item = UIShape> + '_;
+    fn rectangles<I>(&mut self) -> I
+    where
+        I: Iterator<Item = UIShape>;
 }
 
 impl DrainShapes for Vec<UIShape> {
@@ -88,8 +90,9 @@ impl DrainShapes for Vec<UIShape> {
             .collect()
     }
 
-    fn rectangles(&mut self) -> impl Iterator<Item = UIShape> + '_ {
+    fn rectangles(&mut self) -> Vec {
         self.drain(..)
             .filter(|shape| matches!(shape.shape, ShapeType::Rectangle(_)))
+            .collect()
     }
 }

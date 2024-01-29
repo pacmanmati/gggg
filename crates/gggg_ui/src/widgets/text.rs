@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use asset::loader::Loader;
+use gggg_asset::loader::Loader;
 
 use crate::{
     context::Context,

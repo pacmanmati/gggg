@@ -1,14 +1,28 @@
-use std::{cell::RefCell, f32::INFINITY, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    context::{self, Context},
+    context::Context,
     shape::{RectangleShape, ShapeType, UIShape},
     Offset,
 };
 
 use super::{widget::Widget, BoxConstraints, Color, Size};
 
-// pub fn container() -> Container {}
+pub fn container() -> Container {
+    Container::default()
+}
+
+impl Default for Container {
+    fn default() -> Self {
+        Self {
+            width: Default::default(),
+            height: Default::default(),
+            color: Default::default(),
+            constraints: Default::default(),
+            child: Default::default(),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Container {
@@ -77,65 +91,29 @@ impl Widget for Container {
     }
 }
 
-// impl Clone for Container {
-//     fn clone(&self) -> Self {
-//         Self {
-//             width: self.width.clone(),
-//             height: self.height.clone(),
-//             color: self.color.clone(),
-//             child: self.child.,
-//         }
-//     }
-// }
-
-#[derive(Default)]
-pub struct ContainerBuilder {
-    width: Option<f32>,
-    height: Option<f32>,
-    color: Option<Color>,
-    constraints: Option<BoxConstraints>,
-    child: Option<Box<dyn Widget>>,
-}
-
-impl ContainerBuilder {
-    pub fn with_width(mut self, width: f32) -> Self {
-        self.width = Some(width);
+impl Container {
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width;
         self
     }
 
-    pub fn with_height(mut self, height: f32) -> Self {
-        self.height = Some(height);
+    pub fn height(mut self, height: f32) -> Self {
+        self.height = height;
         self
     }
 
-    pub fn with_color(mut self, color: Color) -> Self {
-        self.color = Some(color);
+    pub fn color(mut self, color: Color) -> Self {
+        self.color = color;
         self
     }
 
-    pub fn with_child(mut self, child: Box<dyn Widget>) -> Self {
+    pub fn child(mut self, child: Box<dyn Widget>) -> Self {
         self.child = Some(child);
         self
     }
 
-    pub fn with_constraints(mut self, constraints: BoxConstraints) -> Self {
+    pub fn constraints(mut self, constraints: BoxConstraints) -> Self {
         self.constraints = Some(constraints);
         self
-    }
-
-    pub fn build(self) -> Container {
-        Container {
-            width: self.width.unwrap_or(INFINITY),
-            height: self.height.unwrap_or(INFINITY),
-            color: self.color.unwrap_or(Color::RGBA(0.0, 0.0, 0.0, 0.0)),
-            child: self.child,
-            constraints: self.constraints,
-        }
-    }
-}
-
-impl Container {
-    pub fn new() -> ContainerBuilder {
-        ContainerBuilder::default()
     }
 }

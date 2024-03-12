@@ -33,6 +33,12 @@ impl Color {
     }
 }
 
+impl Default for Color {
+    fn default() -> Self {
+        Color::RGBA(0.0, 0.0, 0.0, 1.0)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct Size {
     pub width: f32,

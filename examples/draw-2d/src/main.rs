@@ -1,4 +1,4 @@
-use std::{f32::consts::TAU, rc::Rc};
+use std::{cell::RefCell, f32::consts::TAU, rc::Rc, sync::Arc};
 
 use gggg::{
     bind::BindHandle,
@@ -15,7 +15,7 @@ use gggg::{
         },
         text_builder::TextBuilder,
     },
-    window::{make_window, AppLoop},
+    window::{make_app, AppLoop},
 };
 use nalgebra::{point, Rotation3, Scale3, Translation3, Vector3};
 
@@ -38,8 +38,8 @@ struct App<'a> {
 impl<'a> AppLoop for App<'a> {
     type App = App<'a>;
 
-    fn init(window: &Window, gggg: &gggg::window::App) -> Self::App {
-        let mut render = Render::new(window).unwrap();
+    fn init(window: Arc<Window>, gggg: &gggg::window::App<Self>) -> Self::App {
+        let mut render = Render::new(window.clone()).unwrap();
         let (shape_pipeline, defaults_bind) = shape_pipeline(&mut render);
         let shape_pipeline_handle = render.add_pipeline(shape_pipeline);
 
@@ -99,7 +99,7 @@ impl<'a> AppLoop for App<'a> {
         }
     }
 
-    fn draw(&mut self, gggg: &gggg::window::App) {
+    fn draw(&mut self, gggg: &gggg::window::App<Self>) {
         // self.rotation += TAU / 100.0;
         // self.r = (self.r + 0.001) % 1.0;
         // self.g = (self.g + 0.002) % 1.0;
@@ -152,7 +152,7 @@ impl<'a> AppLoop for App<'a> {
 }
 
 fn main() {
-    make_window()
+    make_app()
         .with_window_size((700, 700))
         .with_title("draw_2d")
         .run(App::init);

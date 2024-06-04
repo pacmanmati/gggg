@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
 use gggg::{
     bind::BindHandle,
     camera::{Camera, ProjectionType},
     material::BasicMaterial,
     pipeline::PipelineHandle,
     plain::Plain,
-    render::{Mesh, MeshHandle, PhysicalSize, Render},
+    render::{Mesh, MeshHandle, PhysicalSize, Render, Window},
     shapes::{quad_shape_offset, shape_pipeline, ShapeGeometry, ShapeInstance, ShapeRenderObject},
-    window::{make_window, AppLoop},
+    window::{make_app, AppLoop},
 };
 use nalgebra::{point, Translation3};
 
@@ -34,7 +36,7 @@ pub fn quad_geometry() -> ShapeGeometry {
 impl<'a> AppLoop for App<'a> {
     type App = App<'a>;
 
-    fn init(window: &gggg::render::Window, gggg: &gggg::window::App) -> Self::App {
+    fn init(window: Arc<Window>, gggg: &gggg::window::App<Self>) -> Self::App {
         let mut render = Render::new(window).unwrap();
         let (pixel_pipeline, pixel_bind) = shape_pipeline(&mut render);
 
@@ -86,12 +88,12 @@ impl<'a> AppLoop for App<'a> {
         }
     }
 
-    fn input(&mut self, _input: gggg::input::InputEvent, gggg: &gggg::window::App) {
+    fn input(&mut self, _input: gggg::input::InputEvent, gggg: &gggg::window::App<Self>) {
         gggg.get_mouse_position();
         println!("{:?}", _input);
     }
 
-    fn draw(&mut self, gggg: &gggg::window::App) {
+    fn draw(&mut self, gggg: &gggg::window::App<Self>) {
         for pixel in &self.pixels {
             self.render.add_render_object(ShapeRenderObject {
                 transform: Translation3::new(
@@ -132,7 +134,7 @@ impl<'a> AppLoop for App<'a> {
 }
 
 fn main() {
-    make_window()
+    make_app()
         .with_window_size((700, 700))
         .with_title("falling sand")
         .run(App::init);

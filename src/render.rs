@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
 
@@ -32,7 +32,7 @@ pub struct Render<'a> {
     adapter: Adapter,
     device: Option<Device>,
     queue: Queue,
-    surface: Surface,
+    surface: Surface<'a>,
     pipelines: Arena<Pipeline>,
     binds: Arena<Bind<'a>>,
     meshes: Arena<(
@@ -126,9 +126,12 @@ impl<'a> Render<'a> {
                 view_formats: &[],
             };
 
-            let new_texture =
-                self.device()
-                    .create_texture_with_data(&self.queue, &descriptor, data);
+            let new_texture = self.device().create_texture_with_data(
+                &self.queue,
+                &descriptor,
+                wgpu::util::TextureDataOrder::LayerMajor,
+                data,
+            );
 
             let view = new_texture.create_view(&TextureViewDescriptor::default());
             let resource = BindEntryResource::Texture(new_texture, view);
@@ -139,10 +142,10 @@ impl<'a> Render<'a> {
         }
     }
 
-    pub fn new(window: &Window) -> Result<Self> {
+    pub fn new(window: Arc<Window>) -> Result<Self> {
         let instance = Instance::default();
 
-        let surface = unsafe { instance.create_surface(window)? };
+        let surface = instance.create_surface(window.clone())?;
 
         let (adapter, device, queue) = pollster::block_on(async {
             let adapter = instance
@@ -171,11 +174,12 @@ impl<'a> Render<'a> {
                     .formats
                     .first()
                     .ok_or(anyhow!("No formats found."))?,
-                width: window.inner_size().width,
-                height: window.inner_size().height,
+                width: window.clone().inner_size().width,
+                height: window.clone().inner_size().height,
                 present_mode: wgpu::PresentMode::Fifo,
                 alpha_mode: wgpu::CompositeAlphaMode::Auto,
                 view_formats: vec![],
+                desired_maximum_frame_latency: 2,
             },
         );
 
@@ -472,6 +476,7 @@ impl<'a> Render<'a> {
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         self.surface.configure(
             self.device(),
+            // TODO: this file creates a surface configuration in two different places. best to replace with a singular definition returned by a function.
             &SurfaceConfiguration {
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 format: *self
@@ -485,6 +490,7 @@ impl<'a> Render<'a> {
                 present_mode: wgpu::PresentMode::Fifo,
                 alpha_mode: wgpu::CompositeAlphaMode::Auto,
                 view_formats: vec![],
+                desired_maximum_frame_latency: 2,
             },
         );
 
@@ -523,13 +529,13 @@ impl<'a> Render<'a> {
 
                 // update the atlas texture
                 let atlas_texture = Texture::from_atlas(atlas, rect_to_tex, &self.textures);
-                let _ = image::save_buffer(
-                    format!("sdf_atlas_{:?}.png", handle.into_raw_parts()),
-                    &atlas_texture.data,
-                    atlas_texture.width,
-                    atlas_texture.height,
-                    image::ColorType::L8,
-                );
+                // let _ = image::save_buffer(
+                //     format!("sdf_atlas_{:?}.png", handle.into_raw_parts()),
+                //     &atlas_texture.data,
+                //     atlas_texture.width,
+                //     atlas_texture.height,
+                //     image::ColorType::L8,
+                // );
                 self.write_texture(
                     &atlas_texture.data,
                     ImageDataLayout {

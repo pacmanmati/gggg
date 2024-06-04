@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use gggg::{
     bind::{
         vertex_attr_array, BindEntry, BindEntryType, BindHandle, BufferUsages, Extent3d, Face,
@@ -13,7 +15,7 @@ use gggg::{
     render::{AtlasHandle, Mesh, MeshHandle, PhysicalSize, Render, TextureHandle, Window},
     render_object::BasicRenderObject,
     texture::Texture,
-    window::{make_window, AppLoop},
+    window::{make_app, AppLoop},
 };
 use nalgebra::{point, Matrix4, Translation3, Vector4};
 
@@ -196,8 +198,8 @@ impl<'a> App<'a> {
 impl<'a> AppLoop for App<'a> {
     type App = Self;
 
-    fn init(window: &Window, gggg: &gggg::window::App) -> App<'a> {
-        let mut render = Render::new(window).unwrap();
+    fn init(window: Arc<Window>, gggg: &gggg::window::App<Self>) -> App<'a> {
+        let mut render = Render::new(window.clone()).unwrap();
 
         let camera = Camera::new(
             point![1.0, 0.0, 5.0],
@@ -396,7 +398,7 @@ impl<'a> AppLoop for App<'a> {
         }
     }
 
-    fn draw(&mut self, gggg: &gggg::window::App) {
+    fn draw(&mut self, gggg: &gggg::window::App<Self>) {
         self.render.add_render_object(BasicRenderObject {
             pipeline_handle: self.pipeline_handle,
             mesh_handle: self.cube_handle,
@@ -416,7 +418,7 @@ impl<'a> AppLoop for App<'a> {
         self.render.draw();
     }
 
-    fn input(&mut self, input: gggg::input::InputEvent, gggg: &gggg::window::App) {
+    fn input(&mut self, input: gggg::input::InputEvent, gggg: &gggg::window::App<Self>) {
         println!("{:?}", input);
         match input {
             gggg::input::InputEvent::KeyboardInput { key, pressed } => {
@@ -466,7 +468,7 @@ impl<'a> AppLoop for App<'a> {
 }
 
 fn main() {
-    make_window()
+    make_app()
         .with_window_size((700, 700))
         .with_title("hello")
         .run(App::init);

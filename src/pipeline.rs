@@ -3,9 +3,9 @@ use std::mem::take;
 use generational_arena::Index;
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, Device, Face, FragmentState, MultisampleState,
-    PipelineLayoutDescriptor, PrimitiveState, RenderPipeline, RenderPipelineDescriptor,
-    ShaderModule, ShaderModuleDescriptor, TextureFormat, VertexAttribute, VertexState,
-    VertexStepMode,
+    PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, RenderPipeline,
+    RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, TextureFormat, VertexAttribute,
+    VertexState, VertexStepMode,
 };
 
 use crate::{
@@ -130,6 +130,7 @@ impl PipelineBuilder {
                     module: &module,
                     entry_point: "vertex",
                     buffers: vbs.as_slice(),
+                    compilation_options: PipelineCompilationOptions::default(),
                 },
                 primitive: self.primitive_state,
                 depth_stencil: Some(wgpu::DepthStencilState {
@@ -148,6 +149,7 @@ impl PipelineBuilder {
                         blend: Some(BlendState::ALPHA_BLENDING),
                         write_mask: ColorWrites::all(),
                     })],
+                    compilation_options: PipelineCompilationOptions::default(),
                 }),
                 multiview: None,
             });

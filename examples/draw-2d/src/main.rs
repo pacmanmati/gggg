@@ -15,6 +15,7 @@ use gggg::{
         },
         text_builder::TextBuilder,
     },
+    transform::Transform,
     window::{make_app, AppLoop},
 };
 use nalgebra::{point, Rotation3, Scale3, Translation3, Vector3};
@@ -28,7 +29,7 @@ struct App<'a> {
     text_pipeline_handle: PipelineHandle,
     text_bind: BindHandle,
     text_mesh_handle: MeshHandle,
-    roboto_manager: Rc<FontBitmapManager>,
+    font_manager: Rc<RefCell<FontBitmapManager>>,
     rotation: f32,
     r: f32,
     g: f32,
@@ -75,12 +76,11 @@ impl<'a> AppLoop for App<'a> {
         render.write_buffer(camera_bytes, defaults_bind, 0);
         render.write_buffer(camera_bytes, text_bind, 0);
 
-        let font_atlas_handle =
-            render.register_atlas(text_bind, 1, gggg::texture::TextureFormat::R8Unorm);
-        let roboto_manager = Rc::new(
-            FontBitmapManager::new(&mut render, "Roboto.ttf", 4096.0 / 4.0, font_atlas_handle)
-                .unwrap(),
-        );
+        // let font_atlas_handle =
+        //     render.register_atlas(text_bind, 1, gggg::texture::TextureFormat::R8Unorm);
+        let font_manager = Rc::new(RefCell::new(
+            FontBitmapManager::new(&mut render, text_bind).unwrap(),
+        ));
 
         App {
             render,
@@ -91,7 +91,7 @@ impl<'a> AppLoop for App<'a> {
             text_pipeline_handle,
             text_bind,
             text_mesh_handle,
-            roboto_manager,
+            font_manager,
             rotation: 0.0,
             r: 1.0,
             g: 1.0,
@@ -107,13 +107,14 @@ impl<'a> AppLoop for App<'a> {
 
         TextBuilder::new(
             "hello world",
+            "Roboto",
             [self.r, self.g, self.b, 1.0],
-            Translation3::new(0.0, 50.0, 0.0).to_homogeneous()
-                // * Translation3::new(12.0, 1.0, 0.0).to_homogeneous()
-                * Rotation3::from_axis_angle(&Vector3::z_axis(), self.rotation).to_homogeneous()
-                // * Translation3::new(-12.0, -1.0, 0.0).to_homogeneous()
-                * Scale3::new(20.0, 20.0, 1.0).to_homogeneous(),
-            self.roboto_manager.clone(),
+            Transform::new(
+                Translation3::new(0.0, 0.0, 0.0),
+                Rotation3::from_axis_angle(&Vector3::z_axis(), self.rotation),
+                Scale3::new(0.7, 0.7, 1.0),
+            ),
+            self.font_manager.clone(),
             self.text_pipeline_handle,
             self.text_mesh_handle,
             1.0,

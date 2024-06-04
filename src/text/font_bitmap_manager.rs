@@ -1,100 +1,66 @@
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::{BufReader, Read},
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use anyhow::{anyhow, Result};
-use fontdue::{Font, FontSettings, Metrics};
+use cosmic_text::{CacheKey, FontSystem, SwashCache};
 
 use crate::{
+    bind::BindHandle,
     render::{AtlasHandle, Render, TextureHandle},
-    texture::Texture,
+    texture::{Texture, TextureFormat},
 };
 
 // one of these needs to exist for each font used, at each px, each font weight, etc.
 // that's fine - this is just a lightweight mapping of glyph -> texturehandle
 // the bigger concern is keeping so many textures loaded on the renderer
 // but if that becomes an issue, we can solve it
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct FontBitmapManager {
-    map: HashMap<char, (TextureHandle, Metrics)>,
-    pub atlas_handle: AtlasHandle,
-    pub px: f32,
+    pub font_system: Rc<RefCell<FontSystem>>,
+    pub swash_cache: Rc<RefCell<SwashCache>>,
+    pub font_atlas_handle: AtlasHandle,
+    map: Rc<RefCell<HashMap<CacheKey, TextureHandle>>>,
 }
 
 impl FontBitmapManager {
-    pub fn new(
-        render: &mut Render,
-        font_path: &str,
-        px: f32,
-        atlas_handle: AtlasHandle,
-    ) -> Result<Self> {
-        let file = File::open(font_path)?;
-        let mut reader = BufReader::new(file);
-        let mut buf = Vec::new();
-        let _ = reader.read_to_end(&mut buf)?;
-        let font = Font::from_bytes(buf, FontSettings::default()).map_err(|err| anyhow!(err))?;
+    pub fn new(render: &mut Render, text_bind: BindHandle) -> Result<Self> {
+        let font_system = Rc::new(RefCell::new(FontSystem::new()));
+        let swash_cache = Rc::new(RefCell::new(SwashCache::new()));
 
-        let map = 
-        // font
-            // .chars()
-            [('h', 0), ('e', 0), ('l', 0), ('o', 0), ('w', 0), ('r', 0), ('d', 0), (' ', 0)]
-            .iter()
-            .map(|(c, _)| {
-                let (metrics, bitmap) = font.rasterize(*c, px);
-                // println!("{metrics:?}, {c}");
-
-                let sdf_bitmap = msdf::sdf(
-                    &msdf::bitmap::Bitmap {
-                        data: bitmap,
-                        dimensions: (metrics.width as u32, metrics.height as u32),
-                    },
-                    (64, 64),
-                    20,
-                );
-
-                let texture = Texture {
-                    data: sdf_bitmap
-                        .into_iter()
-                        // .flat_map(|val| val.to_le_bytes())
-                        .map(|val| (val * 255.0).floor() as u8)
-                        .collect(),
-                    width: 64,
-                    height: 64,
-                    format: crate::texture::TextureFormat::R8Unorm,
-                };
-                let texture_handle = render.add_texture(texture, atlas_handle)?;
-                anyhow::Ok((*c, (texture_handle, metrics)))
-            })
-            .collect::<Result<HashMap<char, (TextureHandle, Metrics)>>>()?;
+        // register an atlas ourselves?
+        let font_atlas_handle = render.register_atlas(text_bind, 1, TextureFormat::R8Unorm);
 
         Ok(Self {
-            map,
-            atlas_handle,
-            px,
+            font_atlas_handle,
+            font_system,
+            swash_cache,
+            map: Rc::new(RefCell::new(HashMap::new())),
         })
     }
 
-    pub fn get_metric(&self, character: char) -> Result<Metrics> {
-        self.map
-            .get(&character)
-            .ok_or(anyhow!(
-                "Couldn't find metric for character '{}'",
-                character
-            ))
-            .copied()
-            .map(|inner| inner.1)
+    pub fn get_font_system(&self) -> Rc<RefCell<FontSystem>> {
+        self.font_system.clone()
     }
 
-    pub fn get_texture(&self, character: char) -> Result<TextureHandle> {
+    pub fn get_swash_cache(&self) -> Rc<RefCell<SwashCache>> {
+        self.swash_cache.clone()
+    }
+
+    pub fn add_texture(
+        &self,
+        key: CacheKey,
+        texture: Texture,
+        render: &mut Render,
+    ) -> Result<TextureHandle> {
+        let texture_handle = render.add_texture(texture, self.font_atlas_handle)?;
+        self.map.borrow_mut().insert(key, texture_handle);
+        Ok(texture_handle)
+    }
+
+    pub fn get_texture(&self, key: CacheKey) -> Result<TextureHandle> {
         self.map
-            .get(&character)
-            .ok_or(anyhow!(
-                "Couldn't find texture for character '{}'",
-                character
-            ))
+            .borrow()
+            .get(&key)
+            .ok_or(anyhow!("Couldn't find texture for cachekey '{:?}'", key))
             .copied()
-            .map(|inner| inner.0)
     }
 }

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use nalgebra::{Matrix4, Vector4};
 use wgpu::{
@@ -13,7 +13,7 @@ use crate::{
     material::BasicMaterial,
     pipeline::{Pipeline, PipelineBuilder, PipelineHandle},
     plain::Plain,
-    render::{MeshHandle, Render},
+    render::{MeshHandle, Render, TextureHandle},
     render_object::RenderObject,
 };
 
@@ -98,8 +98,9 @@ pub struct TextRenderObject {
     pub albedo: [f32; 4],
     pub pipeline_handle: PipelineHandle,
     pub mesh_handle: MeshHandle,
+    pub texture_handle: TextureHandle,
     pub character: char,
-    pub manager: Rc<FontBitmapManager>,
+    pub manager: Rc<RefCell<FontBitmapManager>>,
 }
 
 impl RenderObject for TextRenderObject {
@@ -114,9 +115,11 @@ impl RenderObject for TextRenderObject {
         // do we want the texture handles to be registered to the renderer?
         // probably yes - existing code relies on any atlas textures being stored on the renderer
         // so the new 'font' struct will need to co-operate with the renderer
-        let texture_handle = self.manager.get_texture(self.character).unwrap();
         let atlas_coords = render
-            .get_atlas_coords_for_texture(texture_handle, self.manager.atlas_handle)
+            .get_atlas_coords_for_texture(
+                self.texture_handle,
+                self.manager.borrow().font_atlas_handle,
+            )
             .unwrap();
         TextInstance {
             transform: self.transform,

@@ -57,8 +57,8 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
 
 
     let sampled = textureSample(atlas_texture, samp, scaled_uv).r;
-    let smoothing = 0.2 / 16.0;
-    let buffer = 0.5;
-    let alpha = smoothstep(buffer - smoothing, buffer + smoothing, sampled);
-    return vec4<f32>(in.color.rgb, alpha);
+    // let smoothing = 0.2 / 16.0;
+    // let buffer = 0.5;
+    // let alpha = smoothstep(buffer - smoothing, buffer + smoothing, sampled);
+    return vec4<f32>(in.color.rgb, sampled);
 }

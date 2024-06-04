@@ -38,3 +38,4 @@ sdf_glyph_renderer = "1.0.0"
 wgpu = "0.20.0"
 msdf = { path = "../msdf" }
 raw-window-handle = "0.6.0"
+cosmic-text = "0.11.2"

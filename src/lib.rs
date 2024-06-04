@@ -13,6 +13,7 @@ pub mod render_object;
 pub mod shapes;
 pub mod text;
 pub mod texture;
+pub mod transform;
 pub mod window;
 
 // how is ui going to work?
